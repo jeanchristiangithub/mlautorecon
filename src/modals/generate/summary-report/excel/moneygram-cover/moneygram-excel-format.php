@@ -300,6 +300,88 @@ function moneygram_summary_create_sendout_sheet(Spreadsheet $spreadsheet, string
     moneygram_summary_style_table($sheet, $lastColumn, $totalRow, ['B', 'G', 'L', 'Q', 'T', 'W']);
 }
 
+function moneygram_summary_create_settlement_vs_daily_sheet(
+    Spreadsheet $spreadsheet,
+    string $sheetTitle,
+    array $report,
+    string $currency,
+    string $reportMonth,
+    string $generatedDate,
+    string $generatedBy,
+    bool $firstSheet,
+    bool $isSendout
+): void {
+    $sheet = $firstSheet ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+    $sheet->setTitle($sheetTitle);
+    $lastColumn = 36;
+    moneygram_summary_set_headers($sheet, 'MONEYGRAM ' . ($isSendout ? 'SENDOUT' : 'PAYOUT'), 'CURRENCY ' . $currency,
+        $reportMonth, $generatedDate, $generatedBy, $lastColumn, 'SETTLEMENT VS DAILY REPORT');
+    moneygram_summary_set_section_headers($sheet, [
+        ['label' => 'DATE', 'span' => 1, 'rowspan' => 3],
+        ['label' => 'Settlement Data', 'span' => 15],
+        ['label' => 'Daily Data', 'span' => 15],
+        ['label' => 'VARIANCE', 'span' => 5],
+    ]);
+    moneygram_summary_set_group_headers($sheet, [
+        ['label' => 'MONEYGRAM', 'span' => 5],
+        ['label' => 'CANCELLED', 'span' => 5],
+        ['label' => 'NET', 'span' => 5],
+        ['label' => $isSendout && $currency === 'USD' ? 'GROSS' : 'MONEYGRAM', 'span' => 5],
+        ['label' => 'CANCELLED', 'span' => 5],
+        ['label' => 'NET', 'span' => 5],
+        ['label' => 'SETTLEMENT vs DAILY', 'span' => 5],
+    ], 2);
+    $amountLabels = ['Volume', 'Principal', 'Fee', 'FX Rev Share', 'Comm'];
+    moneygram_summary_write_values($sheet, MONEYGRAM_SUMMARY_COLUMN_HEADER_ROW,
+        array_merge($amountLabels, $amountLabels, $amountLabels, $amountLabels, $amountLabels, $amountLabels, $amountLabels), 2);
+
+    $settlementDaily = isset($report['settlement_daily']) && is_array($report['settlement_daily'])
+        ? $report['settlement_daily'] : [];
+    $settlementRows = [];
+    foreach (($settlementDaily['rows'] ?? []) as $settlementRow) {
+        if (!empty($settlementRow['date'])) $settlementRows[(string) $settlementRow['date']] = $settlementRow;
+    }
+    $empty = ['volume' => 0, 'principal' => 0, 'fee' => 0, 'fx' => 0, 'commission' => 0];
+    $groupValues = static function (array $group): array {
+        return [
+            moneygram_summary_count($group),
+            moneygram_summary_num($group, 'principal'),
+            moneygram_summary_num($group, 'fee'),
+            moneygram_summary_num($group, 'fx'),
+            moneygram_summary_num($group, 'commission'),
+        ];
+    };
+
+    $rowNumber = MONEYGRAM_SUMMARY_FIRST_DATA_ROW;
+    foreach (($report['rows'] ?? []) as $row) {
+        $date = (string) ($row['date'] ?? '');
+        $settlement = $settlementRows[$date] ?? [];
+        $settlementMoneygram = moneygram_summary_amount($settlement, 'moneygram') ?: $empty;
+        $settlementCancelled = moneygram_summary_amount($settlement, 'cancelled') ?: $empty;
+        $settlementNet = moneygram_summary_amount($settlement, 'net') ?: $empty;
+        $dailyMoneygram = moneygram_summary_amount($row, 'partner') ?: $empty;
+        $dailyCancelled = moneygram_summary_amount($row, 'partner_cancelled') ?: $empty;
+        $dailyNet = moneygram_summary_amount($row, 'net_partner') ?: $empty;
+        $variance = [
+            'volume' => moneygram_summary_count($settlementNet) - moneygram_summary_count($dailyNet),
+            'principal' => moneygram_summary_num($settlementNet, 'principal') - moneygram_summary_num($dailyNet, 'principal'),
+            'fee' => moneygram_summary_num($settlementNet, 'fee') - moneygram_summary_num($dailyNet, 'fee'),
+            'fx' => moneygram_summary_num($settlementNet, 'fx') - moneygram_summary_num($dailyNet, 'fx'),
+            'commission' => moneygram_summary_num($settlementNet, 'commission') - moneygram_summary_num($dailyNet, 'commission'),
+        ];
+        moneygram_summary_write_values($sheet, $rowNumber, array_merge(
+            [moneygram_summary_date_label($date)],
+            $groupValues($settlementMoneygram), $groupValues($settlementCancelled), $groupValues($settlementNet),
+            $groupValues($dailyMoneygram), $groupValues($dailyCancelled), $groupValues($dailyNet), $groupValues($variance)
+        ));
+        $rowNumber++;
+    }
+    $totalRow = $rowNumber + 1;
+    moneygram_summary_sum_row($sheet, $totalRow, MONEYGRAM_SUMMARY_FIRST_DATA_ROW,
+        max(MONEYGRAM_SUMMARY_FIRST_DATA_ROW, $rowNumber - 1), $lastColumn);
+    moneygram_summary_style_table($sheet, $lastColumn, $totalRow, ['B', 'G', 'L', 'Q', 'V', 'AA', 'AF']);
+}
+
 function moneygram_summary_create_settlement_sheet(Spreadsheet $spreadsheet, string $sheetTitle, array $report, string $currency, string $reportMonth, string $generatedDate, string $generatedBy, string $reportHeading = 'RECONCILIATION AND VARIANCE REPORT', bool $fullMonthDates = false): void
 {
     $sheet = $spreadsheet->createSheet();
@@ -354,6 +436,7 @@ function moneygram_summary_create_settlement_sheet(Spreadsheet $spreadsheet, str
 try {
     $month = trim((string) ($_GET['month'] ?? ''));
     $settlementOnly = filter_var($_GET['settlement_only'] ?? false, FILTER_VALIDATE_BOOL);
+    $tabBundle = !$settlementOnly && filter_var($_GET['tab_bundle'] ?? false, FILTER_VALIDATE_BOOL);
     [$startDate, $endDate, $reportMonth] = moneygram_summary_month_range($month);
     $data = moneygram_summary_fetch_data($startDate, $endDate, $settlementOnly);
 
@@ -379,6 +462,58 @@ try {
         moneygram_summary_create_sendout_sheet($spreadsheet, 'SENDOUT USD', $sendoutReports['usd'] ?? [], 'USD', $reportMonth, $generatedDate, $generatedBy);
     }
     $spreadsheet->setActiveSheetIndex(0);
+
+    if ($tabBundle) {
+        if (!class_exists(ZipArchive::class)) {
+            throw new RuntimeException('ZIP support is not available on this server.');
+        }
+        $settlementVsDaily = new Spreadsheet();
+        $settlementVsDaily->getProperties()
+            ->setCreator('ML Auto Recon')
+            ->setTitle('MoneyGram Settlement vs Daily Report');
+        moneygram_summary_create_settlement_vs_daily_sheet($settlementVsDaily, 'PAYOUT PHP', $payoutReports['php'] ?? [],
+            'PHP', $reportMonth, $generatedDate, $generatedBy, true, false);
+        moneygram_summary_create_settlement_vs_daily_sheet($settlementVsDaily, 'PAYOUT USD', $payoutReports['usd'] ?? [],
+            'USD', $reportMonth, $generatedDate, $generatedBy, false, false);
+        moneygram_summary_create_settlement_vs_daily_sheet($settlementVsDaily, 'SENDOUT PHP', $sendoutReports['php'] ?? [],
+            'PHP', $reportMonth, $generatedDate, $generatedBy, false, true);
+        moneygram_summary_create_settlement_vs_daily_sheet($settlementVsDaily, 'SENDOUT USD', $sendoutReports['usd'] ?? [],
+            'USD', $reportMonth, $generatedDate, $generatedBy, false, true);
+        $settlementVsDaily->setActiveSheetIndex(0);
+
+        $dailyPath = tempnam(sys_get_temp_dir(), 'mg_daily_');
+        $settlementPath = tempnam(sys_get_temp_dir(), 'mg_settlement_');
+        $zipPath = tempnam(sys_get_temp_dir(), 'mg_bundle_');
+        if ($dailyPath === false || $settlementPath === false || $zipPath === false) {
+            throw new RuntimeException('Unable to create temporary export files.');
+        }
+        try {
+            (new Xlsx($spreadsheet))->save($dailyPath);
+            (new Xlsx($settlementVsDaily))->save($settlementPath);
+            $zip = new ZipArchive();
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Unable to create the ZIP export file.');
+            }
+            $monthSuffix = str_replace('-', '_', $month);
+            $zip->addFile($dailyPath, 'MONEYGRAM_DAILY_VS_KPX_' . $monthSuffix . '.xlsx');
+            $zip->addFile($settlementPath, 'MONEYGRAM_SETTLEMENT_VS_DAILY_' . $monthSuffix . '.xlsx');
+            $zip->close();
+
+            if (ob_get_length()) ob_end_clean();
+            header('Content-Type: application/zip');
+            header('Content-Disposition: attachment; filename="MONEYGRAM_SUMMARY_REPORTS_' . $monthSuffix . '.zip"');
+            header('Content-Length: ' . filesize($zipPath));
+            header('Cache-Control: max-age=0');
+            readfile($zipPath);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+            $settlementVsDaily->disconnectWorksheets();
+            foreach ([$dailyPath, $settlementPath, $zipPath] as $temporaryPath) {
+                if (is_string($temporaryPath) && is_file($temporaryPath)) unlink($temporaryPath);
+            }
+        }
+        exit;
+    }
 
     $filename = ($settlementOnly ? 'MONEYGRAM_SETTLEMENT_SUMMARY_REPORT_' : 'MONEYGRAM_RECON-&-VARIANCE_SUMMARY_REPORT_')
         . str_replace('-', '_', $month) . '.xlsx';

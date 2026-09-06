@@ -394,6 +394,118 @@ function summary_column_is_not_nullish_where(array $columns, array $candidates):
     ]];
 }
 
+function summary_partner_ids(array $aliases): array
+{
+    try {
+        $placeholders = implode(',', array_fill(0, count($aliases), '?'));
+        $stmt = masterDataConnection()->prepare(
+            'SELECT DISTINCT partner_id FROM corpo_partner_masterfile'
+            . ' WHERE UPPER(TRIM(partner_name)) IN (' . $placeholders . ')'
+        );
+        $stmt->execute(array_map(static fn ($alias): string => strtoupper(trim((string) $alias)), $aliases));
+        return array_values(array_filter($stmt->fetchAll(PDO::FETCH_COLUMN), static fn ($id): bool => $id !== null && $id !== ''));
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function summary_fetch_moneygram_settlement_daily_data(
+    PDO $pdo,
+    array $aliases,
+    array $partnerIds,
+    string $startDate,
+    string $endDate,
+    string $currency,
+    string $cover
+): array {
+    $isSendout = strtolower($cover) === 'sendout';
+    $moneygramTypes = $isSendout ? ['SEN'] : ['REC'];
+    $cancelledTypes = $isSendout ? ['RSN', 'REF'] : ['RRC'];
+    $allTypes = array_merge($moneygramTypes, $cancelledTypes);
+    $effectiveDate = 'DATE(CASE'
+        . ' WHEN psd.settled_date IS NOT NULL AND TRIM(CAST(psd.settled_date AS CHAR)) <> ""'
+        . ' THEN psd.settled_date ELSE psd.tran_date END)';
+    $numeric = static function (string $column): string {
+        return 'ABS(CAST(REPLACE(REPLACE(REPLACE(COALESCE(psd.' . summary_quote_identifier($column)
+            . ', 0), ",", ""), "PHP", ""), "$", "") AS DECIMAL(18, 2)))';
+    };
+    $typeList = static fn (array $types): string => implode(',', array_fill(0, count($types), '?'));
+    $selects = [
+        $effectiveDate . ' AS report_date',
+        'SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN (' . $typeList($moneygramTypes) . ') THEN 1 ELSE 0 END) AS moneygram_volume',
+        'SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN (' . $typeList($cancelledTypes) . ') THEN 1 ELSE 0 END) AS cancelled_volume',
+    ];
+    foreach ([
+        'principal' => 'base_tran_amt',
+        'fee' => 'fee_tran_amt',
+        'fx' => 'fx_rev_share_tran_amt',
+        'commission' => 'comm_tran_amt',
+    ] as $key => $column) {
+        $selects[] = 'SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN (' . $typeList($moneygramTypes)
+            . ') THEN ' . $numeric($column) . ' ELSE 0 END) AS moneygram_' . $key;
+        $selects[] = 'SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN (' . $typeList($cancelledTypes)
+            . ') THEN ' . $numeric($column) . ' ELSE 0 END) AS cancelled_' . $key;
+    }
+
+    $namePlaceholders = implode(',', array_fill(0, count($aliases), '?'));
+    $partnerWhere = 'UPPER(TRIM(psd.partner_name)) IN (' . $namePlaceholders . ')';
+    if ($partnerIds !== []) {
+        $partnerWhere = '(' . $partnerWhere . ' OR psd.partner_id IN ('
+            . implode(',', array_fill(0, count($partnerIds), '?')) . '))';
+    }
+    $sql = 'SELECT ' . implode(', ', $selects)
+        . ' FROM partner_settlement_data psd'
+        . ' WHERE ' . $effectiveDate . ' BETWEEN ? AND ?'
+        . ' AND ' . $partnerWhere
+        . ' AND UPPER(TRIM(psd.transaction_currency)) = ?'
+        . ' AND UPPER(TRIM(psd.tran_type)) IN (' . $typeList($allTypes) . ')'
+        . ' GROUP BY ' . $effectiveDate . ' ORDER BY report_date';
+
+    $params = [];
+    for ($index = 0; $index < 5; $index++) {
+        array_push($params, ...$moneygramTypes, ...$cancelledTypes);
+    }
+    $params[] = $startDate;
+    $params[] = $endDate;
+    array_push($params, ...array_map(static fn ($alias): string => strtoupper(trim((string) $alias)), $aliases));
+    array_push($params, ...$partnerIds);
+    $params[] = strtoupper(trim($currency));
+    array_push($params, ...$allTypes);
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $daily = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $record) {
+        $moneygram = ['volume' => (int) ($record['moneygram_volume'] ?? 0)];
+        $cancelled = ['volume' => (int) ($record['cancelled_volume'] ?? 0)];
+        foreach (['principal', 'fee', 'fx', 'commission'] as $key) {
+            $moneygram[$key] = (float) ($record['moneygram_' . $key] ?? 0);
+            $cancelled[$key] = (float) ($record['cancelled_' . $key] ?? 0);
+        }
+        $date = (string) ($record['report_date'] ?? '');
+        if ($date !== '') {
+            $daily[$date] = ['date' => $date, 'moneygram' => $moneygram, 'cancelled' => $cancelled,
+                'net' => summary_subtract_amounts($moneygram, $cancelled)];
+        }
+    }
+
+    $rows = [];
+    $totals = ['moneygram' => summary_empty_amounts(), 'cancelled' => summary_empty_amounts(), 'net' => summary_empty_amounts()];
+    $cursor = DateTime::createFromFormat('!Y-m-d', $startDate);
+    $lastDate = DateTime::createFromFormat('!Y-m-d', $endDate);
+    while ($cursor && $lastDate && $cursor <= $lastDate) {
+        $date = $cursor->format('Y-m-d');
+        $row = $daily[$date] ?? ['date' => $date, 'moneygram' => summary_empty_amounts(),
+            'cancelled' => summary_empty_amounts(), 'net' => summary_empty_amounts()];
+        foreach (['moneygram', 'cancelled', 'net'] as $key) {
+            $totals[$key] = summary_add_amounts($totals[$key], $row[$key]);
+        }
+        $rows[] = $row;
+        $cursor->modify('+1 day');
+    }
+    return ['rows' => $rows, 'totals' => $totals];
+}
+
 function summary_fetch_moneygram_settlement_report(PDO $pdo, string $startDate, string $endDate, string $currency): array
 {
     // Volume represents the number of settlement rows. Cancelled payout and
@@ -701,6 +813,7 @@ try {
         $currencyReports = [];
         $sendoutReports = [];
         $settlementReports = [];
+        $partnerIds = summary_partner_ids($aliases);
         $requestedScope = strtolower(trim((string) ($_GET['report_scope'] ?? 'all')));
         if (!in_array($requestedScope, ['all', 'payout', 'sendout', 'settlement'], true)) {
             $requestedScope = 'all';
@@ -761,6 +874,9 @@ try {
                 true
             );
             $currencyReports[strtolower($currencyCode)]['currency'] = $currencyCode;
+            $currencyReports[strtolower($currencyCode)]['settlement_daily'] = summary_fetch_moneygram_settlement_daily_data(
+                $pdo, $aliases, $partnerIds, $startDate, $endDate, $currencyCode, 'payout'
+            );
             }
 
             if ($requestedScope === 'all' || $requestedScope === 'sendout') {
@@ -800,6 +916,9 @@ try {
                 true
             );
             $sendoutReports[strtolower($currencyCode)]['currency'] = $currencyCode;
+            $sendoutReports[strtolower($currencyCode)]['settlement_daily'] = summary_fetch_moneygram_settlement_daily_data(
+                $pdo, $aliases, $partnerIds, $startDate, $endDate, $currencyCode, 'sendout'
+            );
             }
             if ($requestedScope === 'all' || $requestedScope === 'settlement') {
             $settlementReports[strtolower($currencyCode)] = summary_fetch_moneygram_settlement_report(

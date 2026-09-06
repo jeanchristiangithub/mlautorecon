@@ -261,8 +261,9 @@ function kpxLoadDuplicateRows(PDO $pdo, array $rows): array
 
 /**
  * Add-on lookup for the explicit MoneyGram re-upload workflow. An unlocked
- * prior match is identified only by CCREF and its transaction-type dates;
- * amount and other editable values must not prevent the overwrite prompt.
+ * prior row is identified only by CCREF and its transaction-type dates;
+ * both status 1 and legacy NULL status rows qualify when unlocked. Amount and
+ * other editable values must not prevent the overwrite prompt.
  */
 function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
 {
@@ -282,8 +283,9 @@ function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
             . 'FROM ml_web_data '
             . "WHERE UPPER(TRIM(COALESCE(partnerName, ''))) = 'MONEYGRAM' "
             . 'AND ccref_no IN (' . $placeholders . ') '
-            . "AND COALESCE(match_status, 0) = 1 AND COALESCE(is_data_locked, '0') = '0' "
-            . 'ORDER BY id ASC'
+            . "AND (match_status = 1 OR match_status IS NULL) "
+            . "AND COALESCE(is_data_locked, '0') = '0' "
+            . 'ORDER BY (match_status = 1) DESC, id ASC'
         );
         $stmt->execute($chunk);
         while ($existing = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -291,7 +293,7 @@ function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
             if (!isset($rowBySignature[$signature])) {
                 $rowBySignature[$signature] = [
                     'id' => (int)$existing['id'],
-                    'match_status' => 1,
+                    'match_status' => $existing['match_status'] === null ? null : 1,
                     'is_data_locked' => '0',
                 ];
             }

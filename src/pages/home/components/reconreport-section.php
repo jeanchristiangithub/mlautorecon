@@ -79,30 +79,29 @@ $reconReportControllerMap = [
                 <span>TRANSACTION TYPE</span>
                 <select id="reconReportTransactionType" name="transaction_type">
                     <option value="">All</option>
-                    <option value="REC">REC - PAYOUT</option>
-                    <option value="RRC">RRC - PAYOUT CANCELLED</option>
-                    <option value="SEN">SEN - SENDOUT</option>
-                    <option value="RSN,REF">RSN, REF - SENDOUT CANCELLED</option>
-                </select>
-            </label>
-
-            <label class="recon-report-field recon-report-field--select" for="reconReportStatus">
-                <span>STATUS</span>
-                <select id="reconReportStatus" name="status">
-                    <option value="">All</option>
-                    <option value="matched">Matched</option>
-                    <option value="mismatch">Mismatch</option>
-                    <option value="duplicate">Duplicate</option>
+                    <option value="REC">REC / PAYOUT</option>
+                    <option value="RRC">RRC / PAYOUT CANCELLED</option>
+                    <option value="SEN">SEN / SENDOUT</option>
+                    <option value="RSN,REF">RSN / REF / SENDOUT CANCELLED</option>
                 </select>
             </label>
 
             <div class="recon-report-actions" aria-label="Recon report actions">
                 <button class="recon-report-button recon-report-button--primary" id="reconReportGenerateBtn" type="submit">Generate</button>
-                <button class="recon-report-button recon-report-button--success" id="reconReportExportBtn" type="button">Export to Excel</button>
                 <button class="recon-report-button recon-report-button--secondary" id="reconReportClearBtn" type="reset">Clear</button>
             </div>
         </form>
 
+        <div class="recon-report-loading-notice" id="reconReportLoadingNotice" role="status" aria-live="polite" hidden></div>
+
+        <div class="recon-report-results" id="reconReportResults" hidden>
+        <div class="recon-report-comparison-tabs" id="reconReportComparisonTabs" role="tablist" aria-label="Reconciliation comparison type">
+            <button class="recon-report-comparison-tab is-active" id="reconReportDailyKpxTab" type="button" role="tab" aria-selected="true" aria-controls="reconReportDailyKpxPanel" data-comparison="daily-kpx">Daily vs KPX</button>
+            <button class="recon-report-comparison-tab" id="reconReportSettlementDailyTab" type="button" role="tab" aria-selected="false" aria-controls="reconReportSettlementDailyPanel" data-comparison="settlement-daily">Settlement vs Daily</button>
+            <button class="recon-report-button recon-report-button--success recon-report-comparison-export" id="reconReportExportBtn" type="button">Export to Excel</button>
+        </div>
+
+        <div class="recon-report-comparison-panel" id="reconReportDailyKpxPanel" role="tabpanel" aria-labelledby="reconReportDailyKpxTab">
         <div class="recon-report-type-tabs" id="reconReportTypeTabs" role="tablist" aria-label="Recon report type" hidden>
             <button class="recon-report-type-tab is-active" type="button" data-report-type="payout" role="tab" aria-selected="true">Payout</button>
             <button class="recon-report-type-tab" type="button" data-report-type="payout-cancelled" role="tab" aria-selected="false">Payout Cancelled</button>
@@ -113,6 +112,15 @@ $reconReportControllerMap = [
                 <span class="recon-report-status-legend-dot" aria-hidden="true"></span>
                 <span>W/ Mismatch and Duplicate</span>
             </span>
+            <label class="recon-report-field recon-report-tab-status" for="reconReportStatus">
+                <span>Status</span>
+                <select id="reconReportStatus" name="status" form="reconReportFilterForm">
+                    <option value="">All</option>
+                    <option value="matched">Matched</option>
+                    <option value="mismatch">Mismatch</option>
+                    <option value="duplicate">Duplicate</option>
+                </select>
+            </label>
             <label class="recon-report-field recon-report-tab-search" for="reconReportSearch">
                 <span>Search</span>
                 <input
@@ -188,6 +196,107 @@ $reconReportControllerMap = [
                 </table>
             </div>
         </div>
+        </div>
+
+        <div class="recon-report-comparison-panel" id="reconReportSettlementDailyPanel" role="tabpanel" aria-labelledby="reconReportSettlementDailyTab" hidden>
+            <div class="recon-report-type-tabs" id="reconReportSettlementTypeTabs" role="tablist" aria-label="Settlement versus daily report type">
+                <button class="recon-report-type-tab is-active" type="button" data-report-type="payout" role="tab" aria-selected="true">Payout</button>
+                <button class="recon-report-type-tab" type="button" data-report-type="payout-cancelled" role="tab" aria-selected="false">Payout Cancelled</button>
+                <button class="recon-report-type-tab" type="button" data-report-type="sendout" role="tab" aria-selected="false">Sendout</button>
+                <button class="recon-report-type-tab" type="button" data-report-type="sendout-cancelled" role="tab" aria-selected="false">Sendout Cancelled</button>
+                <span class="recon-report-status-legend" aria-label="Red dot means with not paid records">
+                    <span>LEGEND:</span>
+                    <span class="recon-report-status-legend-dot" aria-hidden="true"></span>
+                    <span>W/ Not Paid</span>
+                </span>
+                <label class="recon-report-field recon-report-tab-status" for="reconReportSettlementStatus">
+                    <span>Status</span>
+                    <select id="reconReportSettlementStatus" name="settlement_status" form="reconReportFilterForm">
+                        <option value="">All</option>
+                        <option value="paid">Paid</option>
+                        <option value="not-paid">Not Paid</option>
+                    </select>
+                </label>
+                <label class="recon-report-field recon-report-tab-search" for="reconReportSettlementSearch">
+                    <span>Search</span>
+                    <input
+                        id="reconReportSettlementSearch"
+                        name="settlement_search"
+                        type="search"
+                        form="reconReportFilterForm"
+                        placeholder="Search by Reference ID"
+                        autocomplete="off"
+                    >
+                </label>
+            </div>
+
+            <div class="recon-report-table-card">
+                <div class="recon-report-summary" aria-label="Settlement versus daily report summary totals">
+                    <div class="recon-report-summary-group">
+                        <span class="recon-report-summary-title">Settlement Data</span>
+                        <span>Volume: <strong id="reconReportSettlementVolume">0</strong></span>
+                        <span>Principal: <strong id="reconReportSettlementPrincipal">₱0.00 / $0.00</strong></span>
+                        <span>Commission: <strong id="reconReportSettlementCommission">₱0.00 / $0.00</strong></span>
+                    </div>
+
+                    <div class="recon-report-summary-group">
+                        <span class="recon-report-summary-title">Daily Data</span>
+                        <span>Volume: <strong id="reconReportSettlementDailyVolume">0</strong></span>
+                        <span>Principal: <strong id="reconReportSettlementDailyPrincipal">₱0.00 / $0.00</strong></span>
+                        <span>Commission: <strong id="reconReportSettlementDailyCommission">₱0.00 / $0.00</strong></span>
+                    </div>
+                </div>
+
+                <div class="recon-report-table-scroll">
+                    <table class="recon-report-table">
+                        <colgroup>
+                            <col class="recon-report-col--date">
+                            <col class="recon-report-col--reference">
+                            <col class="recon-report-col--amount">
+                            <col class="recon-report-col--commission">
+                            <col class="recon-report-col--currency">
+                            <col class="recon-report-col--transaction-type">
+                            <col class="recon-report-col--date">
+                            <col class="recon-report-col--reference">
+                            <col class="recon-report-col--amount">
+                            <col class="recon-report-col--commission">
+                            <col class="recon-report-col--currency">
+                            <col class="recon-report-col--transaction-type">
+                            <col class="recon-report-col--status">
+                            <col class="recon-report-col--remarks">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th colspan="6" scope="colgroup">Settlement Data</th>
+                                <th colspan="6" scope="colgroup">Daily Data</th>
+                                <th rowspan="2" scope="col">Status</th>
+                                <th rowspan="2" scope="col">Remarks</th>
+                            </tr>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Reference ID</th>
+                                <th scope="col">Amount</th>
+                                <th scope="col">Commission</th>
+                                <th scope="col">Currency</th>
+                                <th class="recon-report-header--wrap" scope="col">Transaction Type</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Reference ID</th>
+                                <th scope="col">Amount</th>
+                                <th scope="col">Commission</th>
+                                <th scope="col">Currency</th>
+                                <th scope="col">Transaction Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reconReportSettlementBody">
+                            <tr class="recon-report-empty-row">
+                                <td colspan="14">No settlement vs daily report data generated yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
     </div>
 </section>
 
@@ -207,7 +316,16 @@ $reconReportControllerMap = [
     const searchInput = document.getElementById('reconReportSearch');
     const exportBtn = document.getElementById('reconReportExportBtn');
     const clearBtn = document.getElementById('reconReportClearBtn');
+    const loadingNotice = document.getElementById('reconReportLoadingNotice');
+    const resultsContainer = document.getElementById('reconReportResults');
+    const comparisonTabs = document.getElementById('reconReportComparisonTabs');
+    const dailyKpxPanel = document.getElementById('reconReportDailyKpxPanel');
+    const settlementDailyPanel = document.getElementById('reconReportSettlementDailyPanel');
     const typeTabs = document.getElementById('reconReportTypeTabs');
+    const settlementTypeTabs = document.getElementById('reconReportSettlementTypeTabs');
+    const settlementStatusSelect = document.getElementById('reconReportSettlementStatus');
+    const settlementSearchInput = document.getElementById('reconReportSettlementSearch');
+    const settlementTbody = document.getElementById('reconReportSettlementBody');
     const table = document.getElementById('reconReportTable');
     const tbody = table ? table.querySelector('tbody') : null;
 
@@ -221,8 +339,40 @@ $reconReportControllerMap = [
         webPrincipalPhp: document.getElementById('reconReportWebPrincipalPhp'),
         webPrincipalUsd: document.getElementById('reconReportWebPrincipalUsd')
     };
+    const settlementSummary = {
+        settlementVolume: document.getElementById('reconReportSettlementVolume'),
+        settlementPrincipal: document.getElementById('reconReportSettlementPrincipal'),
+        settlementCommission: document.getElementById('reconReportSettlementCommission'),
+        dailyVolume: document.getElementById('reconReportSettlementDailyVolume'),
+        dailyPrincipal: document.getElementById('reconReportSettlementDailyPrincipal'),
+        dailyCommission: document.getElementById('reconReportSettlementDailyCommission')
+    };
 
     let reportRows = [];
+    let settlementRows = [];
+
+    function activeComparison() {
+        const activeTab = comparisonTabs && comparisonTabs.querySelector('.recon-report-comparison-tab.is-active');
+        return String(activeTab && activeTab.dataset.comparison || 'daily-kpx');
+    }
+
+    function attachComparisonTabs() {
+        if (!comparisonTabs) return;
+        const tabs = Array.from(comparisonTabs.querySelectorAll('.recon-report-comparison-tab'));
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                const comparison = String(tab.dataset.comparison || 'daily-kpx');
+                tabs.forEach(function (item) {
+                    const isSelected = item === tab;
+                    item.classList.toggle('is-active', isSelected);
+                    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                });
+                if (dailyKpxPanel) dailyKpxPanel.hidden = comparison !== 'daily-kpx';
+                if (settlementDailyPanel) settlementDailyPanel.hidden = comparison !== 'settlement-daily';
+                updateExportButtonVisibility();
+            });
+        });
+    }
 
     function attachTypeTabs() {
         if (!typeTabs) return;
@@ -237,6 +387,26 @@ $reconReportControllerMap = [
                 applyFilters();
             });
         });
+    }
+
+    function attachSettlementTypeTabs() {
+        if (!settlementTypeTabs) return;
+        const tabs = Array.from(settlementTypeTabs.querySelectorAll('.recon-report-type-tab'));
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                tabs.forEach(function (item) {
+                    const isSelected = item === tab;
+                    item.classList.toggle('is-active', isSelected);
+                    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                });
+                applySettlementFilters();
+            });
+        });
+    }
+
+    function activeSettlementReportType() {
+        const activeTab = settlementTypeTabs && settlementTypeTabs.querySelector('.recon-report-type-tab.is-active');
+        return String(activeTab && activeTab.dataset.reportType || 'payout');
     }
 
     function activeReportType() {
@@ -406,7 +576,7 @@ $reconReportControllerMap = [
                 const item = document.createElement('li');
                 item.className = 'recon-report-autocomplete-item';
                 item.setAttribute('role', 'option');
-                item.innerHTML = '<span>' + escapeHtml(partner.name) + '</span><small>' + escapeHtml(partner.id || 'No Partner ID') + '</small>';
+                item.innerHTML = '<span>' + escapeHtml(partner.name) + '</span>';
                 item.addEventListener('mousedown', function (event) {
                     event.preventDefault();
                     selectPartner(partner);
@@ -577,6 +747,20 @@ $reconReportControllerMap = [
         url.searchParams.set('partnerName', partnerName);
         url.searchParams.set('detail', '1');
         url.searchParams.set('range_detail', '1');
+        return url.toString();
+    }
+
+    function settlementDailyEndpoint(partnerName, partnerId, transactionDate) {
+        const baseUrl = String(window.autoreconBaseUrl || '').replace(/\/$/, '');
+        const url = new URL(baseUrl + '/src/controllers/recon/settlement-daily-report.php', window.location.origin);
+        url.searchParams.set('partner_name', partnerName);
+        if (partnerId) url.searchParams.set('partner_id', partnerId);
+        url.searchParams.set('transaction_date', transactionDate);
+
+        const currency = normalizeKey(currencySelect && currencySelect.value);
+        const transactionType = String(transactionTypeSelect && transactionTypeSelect.value || '').trim();
+        if (currency && currency !== 'ALL') url.searchParams.set('currency', currency);
+        if (transactionType) url.searchParams.set('transaction_type', transactionType);
         return url.toString();
     }
 
@@ -918,8 +1102,7 @@ $reconReportControllerMap = [
 
     function updateExportButtonVisibility() {
         if (!exportBtn) return;
-        const hasVisibleRows = visibleRows().length > 0;
-        exportBtn.hidden = !hasVisibleRows;
+        exportBtn.hidden = reportRows.length === 0 && settlementRows.length === 0;
     }
 
     function statusLabel(status) {
@@ -943,6 +1126,162 @@ $reconReportControllerMap = [
                 + '</span>';
         }
         return escapeHtml(row.record_status || '');
+    }
+
+    function setSettlementEmptyRow(message) {
+        if (!settlementTbody) return;
+        settlementTbody.innerHTML = '<tr class="recon-report-empty-row"><td colspan="14">'
+            + escapeHtml(message || 'No settlement vs daily report data generated yet.')
+            + '</td></tr>';
+    }
+
+    function updateSettlementSummary() {
+        const rows = Array.from(settlementTbody ? settlementTbody.querySelectorAll('.recon-report-settlement-result-row') : [])
+            .filter(function (row) { return row.style.display !== 'none'; });
+        const totals = {
+            settlementVolume: 0,
+            settlementPrincipalPhp: 0,
+            settlementPrincipalUsd: 0,
+            settlementCommissionPhp: 0,
+            settlementCommissionUsd: 0,
+            dailyVolume: 0,
+            dailyPrincipalPhp: 0,
+            dailyPrincipalUsd: 0,
+            dailyCommissionPhp: 0,
+            dailyCommissionUsd: 0
+        };
+
+        rows.forEach(function (row) {
+            if (row.dataset.hasSettlement === 'true') {
+                totals.settlementVolume++;
+                if (String(row.dataset.settlementCurrency || '').indexOf('USD') !== -1) {
+                    totals.settlementPrincipalUsd += toNumber(row.dataset.settlementAmount);
+                    totals.settlementCommissionUsd += toNumber(row.dataset.settlementCommission);
+                } else {
+                    totals.settlementPrincipalPhp += toNumber(row.dataset.settlementAmount);
+                    totals.settlementCommissionPhp += toNumber(row.dataset.settlementCommission);
+                }
+            }
+            if (row.dataset.hasDaily === 'true') {
+                totals.dailyVolume++;
+                if (String(row.dataset.dailyCurrency || '').indexOf('USD') !== -1) {
+                    totals.dailyPrincipalUsd += toNumber(row.dataset.dailyAmount);
+                    totals.dailyCommissionUsd += toNumber(row.dataset.dailyCommission);
+                } else {
+                    totals.dailyPrincipalPhp += toNumber(row.dataset.dailyAmount);
+                    totals.dailyCommissionPhp += toNumber(row.dataset.dailyCommission);
+                }
+            }
+        });
+
+        if (settlementSummary.settlementVolume) settlementSummary.settlementVolume.textContent = totals.settlementVolume.toLocaleString();
+        if (settlementSummary.settlementPrincipal) settlementSummary.settlementPrincipal.textContent = summaryMoneyText(totals.settlementPrincipalPhp, totals.settlementPrincipalUsd);
+        if (settlementSummary.settlementCommission) settlementSummary.settlementCommission.textContent = summaryMoneyText(totals.settlementCommissionPhp, totals.settlementCommissionUsd);
+        if (settlementSummary.dailyVolume) settlementSummary.dailyVolume.textContent = totals.dailyVolume.toLocaleString();
+        if (settlementSummary.dailyPrincipal) settlementSummary.dailyPrincipal.textContent = summaryMoneyText(totals.dailyPrincipalPhp, totals.dailyPrincipalUsd);
+        if (settlementSummary.dailyCommission) settlementSummary.dailyCommission.textContent = summaryMoneyText(totals.dailyCommissionPhp, totals.dailyCommissionUsd);
+    }
+
+    function applySettlementFilters() {
+        const query = String(settlementSearchInput && settlementSearchInput.value || '').trim().toLowerCase();
+        const currency = normalizeKey(currencySelect && currencySelect.value);
+        const transactionType = String(transactionTypeSelect && transactionTypeSelect.value || '');
+        const status = String(settlementStatusSelect && settlementStatusSelect.value || '').trim().toLowerCase();
+        const reportType = activeSettlementReportType();
+
+        Array.from(settlementTbody ? settlementTbody.querySelectorAll('.recon-report-settlement-result-row') : []).forEach(function (row) {
+            let show = !reportType || !String(row.dataset.reportType || '') || String(row.dataset.reportType || '') === reportType;
+            if (query && String(row.dataset.search || '').indexOf(query) === -1) show = false;
+            if (currency && currency !== 'ALL'
+                && String(row.dataset.dailyCurrency || '').indexOf(currency) === -1
+                && String(row.dataset.settlementCurrency || '').indexOf(currency) === -1) show = false;
+            if (transactionType) {
+                const selectedTypes = transactionType.split(',').map(normalizeKey).filter(Boolean);
+                const rowTypes = String(row.dataset.transactionTypes || '').split('|').map(normalizeKey).filter(Boolean);
+                if (!rowTypes.some(function (type) { return selectedTypes.indexOf(type) !== -1; })) show = false;
+            }
+            if (status && String(row.dataset.paymentStatus || '') !== status) show = false;
+            row.style.display = show ? '' : 'none';
+        });
+
+        updateSettlementSummary();
+    }
+
+    function renderSettlementRows(rows, settlements) {
+        if (!settlementTbody) return;
+        const dailyRows = rows.filter(rowHasPartnerData);
+        const settlementData = Array.isArray(settlements) ? settlements : [];
+        if (!dailyRows.length && !settlementData.length) {
+            setSettlementEmptyRow('No settlement vs daily report data generated yet.');
+            updateSettlementSummary();
+            return;
+        }
+
+        const dailyByKey = new Map();
+        dailyRows.forEach(function (dailyRow) {
+            const key = matchKey(dailyRow.partner_reference_id, dailyRow.partner_date);
+            if (!key) return;
+            if (!dailyByKey.has(key)) dailyByKey.set(key, []);
+            dailyByKey.get(key).push(dailyRow);
+        });
+
+        const pairedRows = [];
+        const usedDailyRows = new Set();
+        settlementData.forEach(function (settlementRow) {
+            const key = matchKey(settlementRow.reference_id, settlementRow.transaction_date);
+            const dailyRow = (dailyByKey.get(key) || []).find(function (candidate) {
+                return !usedDailyRows.has(candidate);
+            }) || null;
+            if (dailyRow) usedDailyRows.add(dailyRow);
+            pairedRows.push({ settlement: settlementRow, daily: dailyRow });
+        });
+        dailyRows.forEach(function (dailyRow) {
+            if (!usedDailyRows.has(dailyRow)) pairedRows.push({ settlement: null, daily: dailyRow });
+        });
+
+        const fragment = document.createDocumentFragment();
+        pairedRows.forEach(function (pair) {
+            const settlementRow = pair.settlement;
+            const dailyRow = pair.daily;
+            const paymentStatus = settlementRow ? 'paid' : 'not-paid';
+            const settlementType = settlementRow ? String(settlementRow.transaction_type || '') : '';
+            const dailyType = dailyRow ? String(dailyRow.partner_transaction_type || '') : '';
+            const reportType = partnerReportType({ partner_tran_type: dailyType || settlementType });
+            const tr = document.createElement('tr');
+            tr.className = 'recon-report-settlement-result-row recon-report-result-row--' + (paymentStatus === 'paid' ? 'matched' : 'mismatch');
+            tr.dataset.reportType = (dailyRow && dailyRow.partner_report_type) || reportType;
+            tr.dataset.transactionTypes = [settlementType, dailyType].filter(Boolean).join('|');
+            tr.dataset.hasSettlement = settlementRow ? 'true' : 'false';
+            tr.dataset.hasDaily = dailyRow ? 'true' : 'false';
+            tr.dataset.settlementCurrency = normalizeKey(settlementRow && settlementRow.currency);
+            tr.dataset.settlementAmount = String(toNumber(settlementRow && settlementRow.amount));
+            tr.dataset.settlementCommission = String(toNumber(settlementRow && settlementRow.commission));
+            tr.dataset.dailyCurrency = normalizeKey(dailyRow && dailyRow.partner_currency);
+            tr.dataset.dailyAmount = String(toNumber(dailyRow && dailyRow.partner_amount));
+            tr.dataset.dailyCommission = String(toNumber(dailyRow && dailyRow.partner_commission));
+            tr.dataset.paymentStatus = paymentStatus;
+            tr.dataset.search = [settlementRow && settlementRow.reference_id, dailyRow && dailyRow.partner_reference_id].filter(Boolean).join(' ').toLowerCase();
+            tr.innerHTML = ''
+                + '<td>' + escapeHtml(formatDate(settlementRow && settlementRow.transaction_date)) + '</td>'
+                + '<td>' + escapeHtml(settlementRow && settlementRow.reference_id || '') + '</td>'
+                + '<td>' + escapeHtml(settlementRow ? money(settlementRow.amount) : '') + '</td>'
+                + '<td>' + escapeHtml(settlementRow ? money(settlementRow.commission) : '') + '</td>'
+                + '<td>' + escapeHtml(settlementRow && settlementRow.currency || '') + '</td>'
+                + '<td>' + escapeHtml(settlementType) + '</td>'
+                + '<td>' + escapeHtml(formatDate(dailyRow && dailyRow.partner_date)) + '</td>'
+                + '<td>' + escapeHtml(dailyRow && dailyRow.partner_reference_id || '') + '</td>'
+                + '<td>' + escapeHtml(dailyRow ? money(dailyRow.partner_amount) : '') + '</td>'
+                + '<td>' + escapeHtml(dailyRow ? money(dailyRow.partner_commission) : '') + '</td>'
+                + '<td>' + escapeHtml(dailyRow && dailyRow.partner_currency || '') + '</td>'
+                + '<td>' + escapeHtml(dailyType) + '</td>'
+                + '<td>' + (paymentStatus === 'paid' ? 'Paid' : 'Not Paid') + '</td>'
+                + '<td></td>';
+            fragment.appendChild(tr);
+        });
+
+        settlementTbody.innerHTML = '';
+        settlementTbody.appendChild(fragment);
+        applySettlementFilters();
     }
 
     function rowReportDate(row) {
@@ -1153,30 +1492,59 @@ $reconReportControllerMap = [
             generateBtn.disabled = true;
             generateBtn.textContent = 'Generating...';
         }
+        if (loadingNotice) {
+            const loadingPartnerName = normalizeKey(partnerName).indexOf('MONEYGRAM') !== -1 ? 'MoneyGram' : partnerName;
+            loadingNotice.textContent = 'Loading ' + loadingPartnerName + ' cover format...';
+            loadingNotice.hidden = false;
+        }
+        if (resultsContainer) resultsContainer.hidden = true;
         setEmptyRow('Loading recon report data...');
+        setSettlementEmptyRow('Loading daily data...');
 
         try {
-            const response = await fetch(reportEndpoint(partnerName, startDate, endDate), {
-                method: 'GET',
-                credentials: 'same-origin',
-                cache: 'no-store'
-            });
+            const partnerId = String(partnerInput && partnerInput.dataset.partnerId || '').trim();
+            const responses = await Promise.all([
+                fetch(reportEndpoint(partnerName, startDate, endDate), {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                }),
+                fetch(settlementDailyEndpoint(partnerName, partnerId, startDate), {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                })
+            ]);
+            const response = responses[0];
+            const settlementResponse = responses[1];
             const payload = await response.json().catch(function () { return null; });
+            const settlementPayload = await settlementResponse.json().catch(function () { return null; });
             if (!response.ok || !payload || payload.success === false) {
                 throw new Error((payload && (payload.error || payload.message)) || 'Failed to load recon report data.');
             }
+            if (!settlementResponse.ok || !settlementPayload || settlementPayload.success === false) {
+                throw new Error((settlementPayload && (settlementPayload.error || settlementPayload.message)) || 'Failed to load settlement data.');
+            }
 
             reportRows = flattenControllerPayload(payload);
+            settlementRows = Array.isArray(settlementPayload.rows) ? settlementPayload.rows : [];
             updateReportTypeIndicators(reportRows);
             renderRows(reportRows);
+            renderSettlementRows(reportRows, settlementRows);
             applyFilters();
             if (typeTabs) typeTabs.hidden = false;
+            if (resultsContainer) resultsContainer.hidden = false;
         } catch (error) {
             console.error('Recon report generation failed', error);
             reportRows = [];
+            settlementRows = [];
             setEmptyRow(error.message || 'Failed to load recon report data.');
+            setSettlementEmptyRow(error.message || 'Failed to load daily data.');
             updateSummary();
+            updateSettlementSummary();
+            if (resultsContainer) resultsContainer.hidden = true;
         } finally {
+            if (loadingNotice) loadingNotice.hidden = true;
             if (generateBtn) {
                 generateBtn.disabled = false;
                 generateBtn.textContent = 'Generate';
@@ -1185,28 +1553,37 @@ $reconReportControllerMap = [
     }
 
     function clearReport() {
+        if (loadingNotice) loadingNotice.hidden = true;
+        if (resultsContainer) resultsContainer.hidden = true;
         reportRows = [];
+        settlementRows = [];
         updateReportTypeIndicators([]);
         resetReportTypeTabs();
         if (typeTabs) typeTabs.hidden = true;
         setEmptyRow('No recon report data generated yet.');
+        setSettlementEmptyRow('No settlement vs daily report data generated yet.');
         updateSummary();
+        updateSettlementSummary();
     }
 
     function moneygramReconExcelEndpoint(partnerName, startDate, endDate) {
         const baseUrl = String(window.autoreconBaseUrl || '').replace(/\/$/, '');
-        const url = new URL(baseUrl + '/src/modals/generate/recon-details-report/excel/moneygram-recon/moneygram-recon-format.php', window.location.origin);
+        const url = new URL(baseUrl + '/src/modals/generate/recon-details-report/excel/moneygram-recon/moneygram-recon-zip.php', window.location.origin);
         const status = normalizeStatus(statusSelect && statusSelect.value) || 'all';
+        const settlementStatus = String(settlementStatusSelect && settlementStatusSelect.value || 'all').trim().toLowerCase() || 'all';
         const currency = normalizeKey(currencySelect && currencySelect.value) || 'ALL';
         const transactionType = normalizeKey(transactionTypeSelect && transactionTypeSelect.value) || 'all';
 
         url.searchParams.set('start_date', startDate);
         url.searchParams.set('end_date', endDate);
         url.searchParams.set('partnerName', partnerName || 'MONEYGRAM');
+        url.searchParams.set('partner_id', String(partnerInput && partnerInput.dataset.partnerId || '').trim());
         url.searchParams.set('filter', status === 'duplicate' ? 'duplicates' : status);
+        url.searchParams.set('settlement_filter', settlementStatus);
         url.searchParams.set('currency', currency === 'ALL' ? 'all' : currency);
         url.searchParams.set('transaction_type', transactionType);
         url.searchParams.set('report_type', activeReportType());
+        url.searchParams.set('settlement_report_type', activeSettlementReportType());
 
         return url.toString();
     }
@@ -1231,18 +1608,23 @@ $reconReportControllerMap = [
         generateReport();
     });
     if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (settlementSearchInput) settlementSearchInput.addEventListener('input', applySettlementFilters);
+    if (settlementStatusSelect) settlementStatusSelect.addEventListener('change', applySettlementFilters);
     if (currencySelect) currencySelect.addEventListener('change', function () {
         updateReportTypeIndicators(reportRows);
         applyFilters();
+        applySettlementFilters();
     });
     if (transactionTypeSelect) transactionTypeSelect.addEventListener('change', function () {
         updateReportTypeIndicators(reportRows);
         applyFilters();
+        applySettlementFilters();
     });
     if (statusSelect) statusSelect.addEventListener('change', function () {
         updateReportTypeIndicators(reportRows);
         if (reportRows.length) renderRows(reportRows);
         applyFilters();
+        applySettlementFilters();
     });
     if (clearBtn) clearBtn.addEventListener('click', function () {
         window.setTimeout(clearReport, 0);
@@ -1250,7 +1632,9 @@ $reconReportControllerMap = [
     if (exportBtn) exportBtn.addEventListener('click', exportExcelReport);
     attachPartnerAutocomplete();
     attachDateAutofill();
+    attachComparisonTabs();
     attachTypeTabs();
+    attachSettlementTypeTabs();
     clearReport();
 })();
 </script>

@@ -161,6 +161,44 @@ $partnerInputChars = min($partnerInputChars, 90);
             cursor: not-allowed;
         }
 
+        .summary-report-content .summary-view-tabs {
+            display: none;
+            align-items: center;
+            gap: .35rem;
+            margin: 0 0 .75rem;
+            border-bottom: 1px solid #dbe5f1;
+        }
+
+        .summary-report-content .summary-view-tabs.is-visible {
+            display: flex;
+        }
+
+        .summary-report-content .summary-view-tab {
+            margin-bottom: -1px;
+            padding: .55rem 1rem;
+            color: #374151;
+            background: #fff;
+            border: 1px solid #dbe5f1;
+            border-radius: 6px 6px 0 0;
+            font-size: .86rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .summary-report-content .summary-view-tab.is-active {
+            color: #fff;
+            background: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .summary-report-content .summary-view-tab-spacer {
+            flex: 1 1 auto;
+        }
+
+        .summary-report-content .summary-view-panel[hidden] {
+            display: none;
+        }
+
         .summary-report-content .mg-cover {
             display: none;
             margin-top: .75rem;
@@ -365,6 +403,25 @@ $partnerInputChars = min($partnerInputChars, 90);
             background: #fef5f6;
         }
 
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order th,
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order td {
+            background: #fff !important;
+        }
+
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(1) th:nth-child(3),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(2) th:nth-child(n+4):nth-child(-n+6),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(3) th:nth-child(n+16):nth-child(-n+30),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(3)) td:nth-child(n+17):nth-child(-n+31) {
+            background: #fcebed !important;
+        }
+
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(1) th:nth-child(4),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(2) th:nth-child(7),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:nth-child(3) th:nth-child(n+31),
+        .summary-report-content .mg-cover.is-moneygram.is-settlement-daily-order tbody tr:not(:nth-child(1)):not(:nth-child(2)):not(:nth-child(3)) td:nth-child(n+32) {
+            background: #fef5f6 !important;
+        }
+
         .summary-report-content .mg-cover.is-moneygram-settlement table {
             min-width: 1180px;
             width: 100%;
@@ -531,6 +588,20 @@ $partnerInputChars = min($partnerInputChars, 90);
         <button id="summarySubmit" class="summary-button" type="submit">Generate</button>
     </form>
 
+    <div id="summaryViewTabs" class="summary-view-tabs" role="tablist" aria-label="Summary report type">
+        <button id="summaryDailyKpxTab" class="summary-view-tab is-active" type="button"
+            data-summary-view="daily-kpx" role="tab" aria-selected="true" aria-controls="summaryDailyKpxPanel">
+            Daily vs KPX
+        </button>
+        <button id="summarySettlementDailyTab" class="summary-view-tab" type="button"
+            data-summary-view="settlement-daily" role="tab" aria-selected="false" aria-controls="summarySettlementDailyPanel">
+            Settlement vs Daily
+        </button>
+        <span class="summary-view-tab-spacer" aria-hidden="true"></span>
+        <button id="summaryExportExcel" class="summary-button summary-button--export" type="button" disabled>Export to Excel</button>
+    </div>
+
+    <div id="summaryDailyKpxPanel" class="summary-view-panel" role="tabpanel" aria-labelledby="summaryDailyKpxTab">
     <div id="moneygramCoverMessage" class="mg-cover__message"></div>
 
     <div id="moneygramCoverTabs" class="moneygram-cover-tabs" role="tablist" aria-label="MoneyGram cover type">
@@ -553,8 +624,6 @@ $partnerInputChars = min($partnerInputChars, 90);
                 </label>
             </div>
         </div>
-        <span class="summary-export-spacer" aria-hidden="true"></span>
-        <button id="summaryExportExcel" class="summary-button summary-button--export" type="button" disabled>Export to Excel</button>
     </div>
     <div>
         
@@ -578,6 +647,10 @@ $partnerInputChars = min($partnerInputChars, 90);
             </table>
         </div>
     </div>
+    </div>
+
+    <div id="summarySettlementDailyPanel" class="summary-view-panel" role="tabpanel"
+        aria-labelledby="summarySettlementDailyTab" hidden></div>
 
 </div>
 
@@ -586,6 +659,10 @@ $partnerInputChars = min($partnerInputChars, 90);
     const form = document.getElementById('summaryReportForm');
     const partnerEl = document.getElementById('summaryPartner');
     const monthEl = document.getElementById('summaryMonth');
+    const summaryViewTabs = document.getElementById('summaryViewTabs');
+    const summaryViewTabButtons = Array.from(document.querySelectorAll('#summaryViewTabs .summary-view-tab'));
+    const summaryDailyKpxPanel = document.getElementById('summaryDailyKpxPanel');
+    const summarySettlementDailyPanel = document.getElementById('summarySettlementDailyPanel');
     const submitEl = document.getElementById('summarySubmit');
     const exportExcelEl = document.getElementById('summaryExportExcel');
     const downloadSectionEl = document.getElementById('summaryDownloadSection');
@@ -1254,7 +1331,164 @@ $partnerInputChars = min($partnerInputChars, 90);
         moneygramCoverMessage.textContent = '';
     }
 
+    function selectSummaryView(selectedView) {
+        summaryViewTabButtons.forEach(button => {
+            const isActive = button.dataset.summaryView === selectedView;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        summaryDailyKpxPanel.hidden = selectedView !== 'daily-kpx';
+        summarySettlementDailyPanel.hidden = selectedView !== 'settlement-daily';
+    }
+
+    function renderBlankSettlementDailyView() {
+        if (!summaryDailyKpxPanel || !summarySettlementDailyPanel) return;
+
+        const blankView = summaryDailyKpxPanel.cloneNode(true);
+        blankView.removeAttribute('id');
+        blankView.removeAttribute('role');
+        blankView.removeAttribute('aria-labelledby');
+        blankView.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+        const blankCover = blankView.querySelector('.mg-cover.is-moneygram:not(.is-moneygram-settlement)');
+        if (blankCover) {
+            blankCover.classList.add('is-settlement-daily-order');
+            const rows = Array.from(blankCover.querySelectorAll('tbody > tr'));
+            const reportsKey = currentMoneygramCover === 'sendout' ? 'sendout_reports' : 'currency_reports';
+            const selectedReport = currentMoneygramData
+                && currentMoneygramData[reportsKey]
+                && currentMoneygramData[reportsKey][currentMoneygramCurrency]
+                ? currentMoneygramData[reportsKey][currentMoneygramCurrency]
+                : {};
+            const settlementDaily = selectedReport.settlement_daily || {};
+            const settlementRows = Array.isArray(settlementDaily.rows) ? settlementDaily.rows : [];
+            const settlementTotals = settlementDaily.totals || {};
+            const moveCellBlock = function(row, startIndex, count, beforeIndex) {
+                if (!row) return;
+                const cells = Array.from(row.children);
+                const block = cells.slice(startIndex, startIndex + count);
+                const reference = cells[beforeIndex] || null;
+                block.forEach(cell => row.insertBefore(cell, reference));
+            };
+            moveCellBlock(rows[0], 2, 1, 1);
+            moveCellBlock(rows[1], 3, 2, 0);
+            moveCellBlock(rows[2], 15, 6, 0);
+            rows.slice(3).forEach(row => moveCellBlock(row, 16, 6, 1));
+
+            const settlementSection = rows[0] && rows[0].children[1];
+            if (settlementSection) settlementSection.colSpan = 15;
+            const varianceSection = rows[0] && rows[0].children[3];
+            if (varianceSection) varianceSection.colSpan = 5;
+
+            const createHeader = function(label, span) {
+                const header = document.createElement('th');
+                header.textContent = label;
+                if (span > 1) header.colSpan = span;
+                return header;
+            };
+            if (rows[1] && rows[1].children.length >= 3) {
+                const dailyGroupStart = rows[1].children[2];
+                rows[1].children[0].remove();
+                rows[1].children[0].remove();
+                ['MONEYGRAM', 'CANCELLED', 'NET'].forEach(label => {
+                    rows[1].insertBefore(createHeader(label, 5), dailyGroupStart);
+                });
+                const varianceGroup = rows[1].lastElementChild;
+                if (varianceGroup) varianceGroup.colSpan = 5;
+            }
+            const settlementLabels = ['Volume', 'Principal', 'Fee', 'FX Rev Share', 'Comm'];
+            if (rows[2] && rows[2].children.length >= 7) {
+                const dailyColumnStart = rows[2].children[6];
+                Array.from(rows[2].children).slice(0, 6).forEach(cell => cell.remove());
+                ['MONEYGRAM', 'CANCELLED', 'NET'].forEach(() => {
+                    settlementLabels.forEach(label => rows[2].insertBefore(createHeader(label, 1), dailyColumnStart));
+                });
+                ['Fee', 'FX Rev Share', 'Comm'].forEach(label => rows[2].appendChild(createHeader(label, 1)));
+            }
+            rows.slice(3).forEach((row, rowIndex) => {
+                if (row.children.length < 8) return;
+                const dailyDataStart = row.children[7];
+                Array.from(row.children).slice(1, 7).forEach(cell => cell.remove());
+                for (let index = 0; index < 15; index += 1) {
+                    row.insertBefore(document.createElement('td'), dailyDataStart);
+                }
+                for (let index = 0; index < 3; index += 1) {
+                    row.appendChild(document.createElement('td'));
+                }
+                const source = rowIndex < settlementRows.length ? settlementRows[rowIndex] : settlementTotals;
+                const settlementValues = [];
+                ['moneygram', 'cancelled', 'net'].forEach(groupKey => {
+                    const group = source && source[groupKey] ? source[groupKey] : {};
+                    settlementValues.push(
+                        fmtCount(group.volume),
+                        fmtMoney(group.principal),
+                        fmtMoney(group.fee),
+                        fmtMoney(group.fx),
+                        fmtMoney(group.commission)
+                    );
+                });
+                Array.from(row.children).slice(1, 16).forEach((cell, index) => {
+                    cell.textContent = settlementValues[index];
+                });
+                const dailySource = rowIndex < (Array.isArray(selectedReport.rows) ? selectedReport.rows.length : 0)
+                    ? selectedReport.rows[rowIndex]
+                    : (selectedReport.totals || {});
+                const settlementNet = source && source.net ? source.net : {};
+                const dailyNet = dailySource && dailySource.net_partner ? dailySource.net_partner : {};
+                const varianceValues = [
+                    fmtCount(Number(settlementNet.volume || 0) - Number(dailyNet.volume || 0)),
+                    fmtMoney(Number(settlementNet.principal || 0) - Number(dailyNet.principal || 0)),
+                    fmtMoney(Number(settlementNet.fee || 0) - Number(dailyNet.fee || 0)),
+                    fmtMoney(Number(settlementNet.fx || 0) - Number(dailyNet.fx || 0)),
+                    fmtMoney(Number(settlementNet.commission || 0) - Number(dailyNet.commission || 0))
+                ];
+                Array.from(row.children).slice(31, 36).forEach((cell, index) => {
+                    cell.textContent = varianceValues[index];
+                });
+            });
+            blankCover.querySelectorAll('th').forEach(header => {
+                const label = header.textContent.trim().toLowerCase();
+                if (label === 'kpx web data') header.textContent = 'Settlement Data';
+                if (label === 'partner data') header.textContent = 'Daily Data';
+                if (label.includes('vs kpx web')) header.textContent = 'SETTLEMENT vs DAILY';
+            });
+        } else {
+            blankView.querySelectorAll('td').forEach(cell => { cell.textContent = ''; });
+        }
+        blankView.querySelectorAll('.mg-cover__message').forEach(message => {
+            message.textContent = '';
+            message.classList.remove('is-visible');
+        });
+        blankView.querySelectorAll('.summary-download-section').forEach(section => section.classList.remove('is-visible'));
+        blankView.querySelectorAll('.summary-download-link').forEach(link => {
+            link.hidden = true;
+            link.removeAttribute('href');
+        });
+        blankView.querySelectorAll('.summary-button--export').forEach(button => { button.disabled = true; });
+        blankView.querySelectorAll('.moneygram-cover-tab').forEach(tab => {
+            tab.addEventListener('click', async function(){
+                const cover = tab.dataset.moneygramCover === 'sendout' ? 'sendout' : 'payout';
+                const currency = tab.dataset.moneygramCurrency === 'usd' ? 'usd' : 'php';
+                await loadMoneygramSection(cover, currency);
+                renderBlankSettlementDailyView();
+                selectSummaryView('settlement-daily');
+            });
+        });
+        blankView.querySelectorAll('.wic-cover-tab').forEach(tab => {
+            tab.addEventListener('click', function(){
+                if (!currentWicData) return;
+                const currency = tab.dataset.wicCurrency === 'usd' ? 'usd' : 'php';
+                renderWicCover(currentWicData, currency);
+                renderBlankSettlementDailyView();
+                selectSummaryView('settlement-daily');
+            });
+        });
+
+        summarySettlementDailyPanel.replaceChildren(...Array.from(blankView.childNodes));
+    }
+
     async function loadSummaryReport() {
+        selectSummaryView('daily-kpx');
+        if (summaryViewTabs) summaryViewTabs.classList.remove('is-visible');
         const selectedPartner = partnerEl.value;
         const selectedKey = normalizePartner(selectedPartner);
         const isMoneygram = selectedKey === 'MONEYGRAM';
@@ -1328,6 +1562,8 @@ $partnerInputChars = min($partnerInputChars, 90);
                 currentWicData = data;
                 renderWicCover(data, currentWicCurrency);
             }
+            renderBlankSettlementDailyView();
+            if (summaryViewTabs) summaryViewTabs.classList.add('is-visible');
         } catch (error) {
             moneygramCover.classList.remove('is-visible');
             setExportReady(false);
@@ -1440,7 +1676,7 @@ $partnerInputChars = min($partnerInputChars, 90);
 
     function placeExportButton(container) {
         if (exportHostEl) {
-            exportHostEl.classList.toggle('is-visible', container === exportHostEl);
+            exportHostEl.classList.remove('is-visible');
         }
         if (!exportExcelEl) return;
         if (!container) {
@@ -1448,16 +1684,7 @@ $partnerInputChars = min($partnerInputChars, 90);
             exportExcelEl.hidden = true;
             return;
         }
-        if (container === moneygramCoverTabs || container === wicCoverTabs) {
-            let spacer = container.querySelector('.summary-export-spacer');
-            if (!spacer) {
-                spacer = document.createElement('span');
-                spacer.className = 'summary-export-spacer';
-                spacer.setAttribute('aria-hidden', 'true');
-                container.appendChild(spacer);
-            }
-        }
-        container.appendChild(exportExcelEl);
+        if (summaryViewTabs) summaryViewTabs.appendChild(exportExcelEl);
     }
 
     function clearDownloadSection() {
@@ -1479,7 +1706,8 @@ $partnerInputChars = min($partnerInputChars, 90);
         const prefix = selectedKey === 'MONEYGRAM'
             ? 'MONEYGRAM'
             : ((selectedKey === 'MBTC' || selectedKey === 'METROBANKHEADOFFICE') ? 'MBTC' : 'WIC');
-        const fallback = `${prefix}_SUMMARY_REPORT_${monthEl.value || 'report'}.xlsx`;
+        const extension = selectedKey === 'MONEYGRAM' ? 'zip' : 'xlsx';
+        const fallback = `${prefix}_SUMMARY_REPORT_${monthEl.value || 'report'}.${extension}`;
         const match = String(disposition || '').match(/filename="?([^"]+)"?/i);
         return match && match[1] ? match[1] : fallback;
     }
@@ -1519,6 +1747,7 @@ $partnerInputChars = min($partnerInputChars, 90);
 
         try {
             const params = new URLSearchParams({ month: monthEl.value });
+            if (selectedKey === 'MONEYGRAM') params.set('tab_bundle', '1');
             const response = await fetch(`${endpoint}?${params.toString()}`, {
                 credentials: 'same-origin'
             });
@@ -1556,6 +1785,12 @@ $partnerInputChars = min($partnerInputChars, 90);
     form.addEventListener('submit', function(event){
         event.preventDefault();
         loadSummaryReport();
+    });
+
+    summaryViewTabButtons.forEach(button => {
+        button.addEventListener('click', function(){
+            selectSummaryView(button.dataset.summaryView);
+        });
     });
 
     if (exportExcelEl) {

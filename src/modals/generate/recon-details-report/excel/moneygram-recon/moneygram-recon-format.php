@@ -115,7 +115,7 @@ function moneygram_recon_fetch_data(string $startDate, string $endDate, string $
 function moneygram_recon_date_label(string $date): string
 {
     $dateObj = DateTime::createFromFormat('Y-m-d', $date);
-    return $dateObj ? $dateObj->format('m-d-Y') : $date;
+    return $dateObj ? $dateObj->format('F d, Y') : $date;
 }
 
 function moneygram_recon_report_date_label(string $startDate, string $endDate): string
@@ -471,17 +471,14 @@ function moneygram_recon_write_rows(Worksheet $sheet, array $rows): void
     $sheet->getStyle("M12:M{$lastRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
 }
 
-try {
-    $startDate = moneygram_recon_input_date('start_date');
-    $endDate = moneygram_recon_input_date('end_date');
-    $filter = moneygram_recon_input_filter();
-    $currency = moneygram_recon_input_currency();
-    $reportType = moneygram_recon_input_report_type();
-    $partnerName = trim((string) ($_GET['partnerName'] ?? 'MONEYGRAM'));
-    if ($partnerName === '') {
-        $partnerName = 'MONEYGRAM';
-    }
-
+function moneygram_recon_build_workbook(
+    string $startDate,
+    string $endDate,
+    string $partnerName,
+    string $filter,
+    string $currency,
+    string $reportType
+): array {
     $data = moneygram_recon_fetch_data($startDate, $endDate, $partnerName);
     $spreadsheet = new Spreadsheet();
     $reportDate = moneygram_recon_report_date_label($startDate, $endDate);
@@ -514,12 +511,28 @@ try {
     }else{
         $filename = 'MONEYGRAM-RECON-DETAILS-REPORT' . $currencyFilenamePart . '-' . $startDate . '-to-' . $endDate . '.xlsx';
     }
-    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Cache-Control: max-age=0');
-    (new Xlsx($spreadsheet))->save('php://output');
-} catch (Throwable $e) {
-    http_response_code(400);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo $e->getMessage();
+
+    return ['spreadsheet' => $spreadsheet, 'filename' => $filename];
+}
+
+if (!defined('MONEYGRAM_RECON_EXPORT_LIBRARY_ONLY')) {
+    try {
+        $startDate = moneygram_recon_input_date('start_date');
+        $endDate = moneygram_recon_input_date('end_date');
+        $filter = moneygram_recon_input_filter();
+        $currency = moneygram_recon_input_currency();
+        $reportType = moneygram_recon_input_report_type();
+        $partnerName = trim((string) ($_GET['partnerName'] ?? 'MONEYGRAM'));
+        if ($partnerName === '') $partnerName = 'MONEYGRAM';
+
+        $export = moneygram_recon_build_workbook($startDate, $endDate, $partnerName, $filter, $currency, $reportType);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $export['filename'] . '"');
+        header('Cache-Control: max-age=0');
+        (new Xlsx($export['spreadsheet']))->save('php://output');
+    } catch (Throwable $e) {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $e->getMessage();
+    }
 }
