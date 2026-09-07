@@ -655,7 +655,7 @@ if ($currentUserId !== '') {
         // 'navUploadedFileLogs',
         'navWebDataCancellation',
         // 'navDataEntrySettlementDetail',
-        'navEdiReport',
+        // 'navEdiReport',
         'navBranchStatusLogs',
         'navMaintenance',
         //'navBranchStatusPosting'

@@ -22,6 +22,27 @@
     box-sizing: border-box;
 }
 
+.edi-report-loading-card {
+    width: 100%;
+    margin-top: 16px;
+    padding: 13px 16px;
+    border: 1px solid #d5deeb;
+    border-radius: 8px;
+    background: #fff;
+    color: #667085;
+    font-size: 13px;
+    font-weight: 400;
+    box-sizing: border-box;
+}
+
+.edi-report-loading-card[hidden] {
+    display: none;
+}
+
+.edi-report-results-content[hidden] {
+    display: none;
+}
+
 .edi-report-field {
     display: flex;
     flex: 1 1 145px;
@@ -156,6 +177,14 @@
     cursor: pointer;
 }
 
+.edi-report-tabs-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+    border-bottom: 1px solid #d5deeb;
+}
+
 .edi-report-export {
     min-width: 126px;
     background: #198754;
@@ -182,8 +211,32 @@
 .edi-report-tabs {
     display: flex;
     gap: 4px;
-    margin-top: 16px;
-    border-bottom: 1px solid #d5deeb;
+}
+
+.edi-report-tab-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 0 0 8px auto;
+}
+
+.edi-report-tab-status {
+    flex: 0 0 auto;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.edi-report-tab-status[hidden] {
+    display: none;
+}
+
+.edi-report-tab-status > span {
+    white-space: nowrap;
+}
+
+.edi-report-tab-status select {
+    width: 190px;
 }
 
 .edi-report-tab {
@@ -455,6 +508,45 @@
     transition: background-color 0.15s ease;
 }
 
+.edi-report-table tfoot th,
+.edi-report-table tfoot td {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    border-top: 2px solid #17213c;
+    background: #f8fafc;
+    font-weight: 700;
+    box-shadow: 0 -1px 0 #17213c;
+}
+
+.edi-report-table tfoot th {
+    text-align: right;
+    text-transform: uppercase;
+}
+
+.edi-report-table tfoot td:nth-child(3),
+.edi-report-table tfoot td:nth-child(4),
+.edi-report-table tfoot td:nth-child(5),
+.edi-report-table tfoot td:nth-child(7),
+.edi-report-table tfoot td:nth-child(8),
+.edi-report-table tfoot td:nth-child(9),
+.edi-report-table tfoot td:nth-child(11),
+.edi-report-table tfoot td:nth-child(12),
+.edi-report-table tfoot td:nth-child(13),
+.edi-report-table tfoot td:nth-child(15),
+.edi-report-table tfoot td:nth-child(16),
+.edi-report-table tfoot td:nth-child(17) {
+    text-align: right;
+}
+
+.edi-report-table tfoot tr[hidden] {
+    display: none;
+}
+
+.edi-report-table tfoot tr > td:last-child {
+    border-right: 0;
+}
+
 .edi-report-empty-row td {
     height: 22px;
 }
@@ -499,9 +591,27 @@
         flex-basis: 100%;
     }
 
+    .edi-report-tabs-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .edi-report-tab-controls {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .edi-report-tab-status {
+        flex: 1 1 auto;
+    }
+
+    .edi-report-tab-status select {
+        flex: 1 1 auto;
+        width: auto;
+    }
+
     .edi-report-generate,
     .edi-report-export {
-        flex: 1 1 100%;
         width: 100%;
     }
 }

@@ -99,21 +99,16 @@ try {
             'mainzone' => ['Mainzone', 'Mainzone'],
             'zone' => ['Zone', 'Zone'],
             'region' => ['Region', 'Region'],
-            'ml_matic_status' => ['Branch Status', 'BranchStatus'],
         ];
         ?>
         <?php foreach ($ediReportSelectFields as $fieldName => [$fieldLabel, $fieldIdSuffix]): ?>
             <label class="edi-report-field edi-report-field--select">
                 <span>
                     <?= htmlspecialchars($fieldLabel, ENT_QUOTES, 'UTF-8') ?>
-                    <?php if ($fieldName === 'ml_matic_status'): ?>
-                        <i class="edi-report-required" aria-hidden="true">*</i>
-                    <?php endif; ?>
                 </span>
                 <select
                     id="ediReport<?= $fieldIdSuffix ?>"
                     name="<?= htmlspecialchars($fieldName, ENT_QUOTES, 'UTF-8') ?>"
-                    <?= $fieldName === 'ml_matic_status' ? 'required' : '' ?>
                 >
                     <option value="">Select a <?= htmlspecialchars($fieldLabel, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php foreach ($ediReportBranchFilters[$fieldName] as $fieldValue): ?>
@@ -130,6 +125,18 @@ try {
                 </select>
             </label>
         <?php endforeach; ?>
+
+        <label class="edi-report-field edi-report-field--select">
+            <span>Branch Status <i class="edi-report-required" aria-hidden="true">*</i></span>
+            <select id="ediReportBranchStatus" name="ml_matic_status" required>
+                <option value="">Select a Branch Status</option>
+                <?php foreach ($ediReportBranchFilters['ml_matic_status'] as $statusValue): ?>
+                    <option value="<?= htmlspecialchars($statusValue, ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars($statusValue, ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
 
         <label class="edi-report-field edi-report-field--branch">
             <span>Branch Name</span>
@@ -159,29 +166,39 @@ try {
         </label>
 
         <button id="ediReportGenerate" class="edi-report-generate" type="submit">Generate</button>
-        <button id="ediReportExportExcel" class="edi-report-export" type="button" disabled>Export to Excel</button>
     </form>
 
-    <div class="edi-report-tabs" role="tablist" aria-label="EDI report views">
-        <button
-            id="ediReportBranchDetailsTab"
-            class="edi-report-tab is-active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="ediReportBranchDetailsPanel"
-            data-edi-tab="branch-details"
-        >Branch Details</button>
-        <button
-            id="ediReportVolumeSummaryTab"
-            class="edi-report-tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="ediReportVolumeSummaryPanel"
-            data-edi-tab="volume-summary"
-            tabindex="-1"
-        >Volume Summary</button>
+    <div id="ediReportLoadingCard" class="edi-report-loading-card" role="status" aria-live="polite" hidden>
+        Loading MoneyGram EDI format...
+    </div>
+
+    <div id="ediReportResultsContent" class="edi-report-results-content" hidden>
+    <div class="edi-report-tabs-toolbar">
+        <div class="edi-report-tabs" role="tablist" aria-label="EDI report views">
+            <button
+                id="ediReportBranchDetailsTab"
+                class="edi-report-tab is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="ediReportBranchDetailsPanel"
+                data-edi-tab="branch-details"
+            >Branch Details</button>
+            <button
+                id="ediReportVolumeSummaryTab"
+                class="edi-report-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="ediReportVolumeSummaryPanel"
+                data-edi-tab="volume-summary"
+                tabindex="-1"
+            >Volume Summary</button>
+        </div>
+
+        <div class="edi-report-tab-controls">
+            <button id="ediReportExportExcel" class="edi-report-export" type="button" disabled>Export to Excel</button>
+        </div>
     </div>
 
     <section
@@ -229,6 +246,15 @@ try {
                     <?php endfor; ?>
                 </tr>
             </tbody>
+            <tfoot>
+                <tr id="ediReportGrandTotalRow" hidden>
+                    <th colspan="4" scope="row">Grand Total:</th>
+                    <?php for ($ediTotalColumn = 0; $ediTotalColumn < 16; $ediTotalColumn++): ?>
+                        <td>&nbsp;</td>
+                    <?php endfor; ?>
+                    <td>&nbsp;</td>
+                </tr>
+            </tfoot>
             </table>
         </div>
     </section>
@@ -321,6 +347,7 @@ try {
             </table>
         </div>
     </section>
+    </div>
 </section>
 
 <script>
@@ -423,6 +450,37 @@ try {
                     : formatSummaryAmount(value);
             });
         });
+    };
+
+    const updateBranchDetailsGrandTotal = (rows = []) => {
+        const grandTotalRow = document.getElementById('ediReportGrandTotalRow');
+        if (!grandTotalRow) return;
+        const totalCells = Array.from(grandTotalRow.querySelectorAll('td'));
+        totalCells.forEach((cell) => { cell.innerHTML = '&nbsp;'; });
+        if (rows.length === 0) {
+            grandTotalRow.hidden = true;
+            return;
+        }
+
+        const totals = Array(16).fill(0);
+        rows.forEach((record) => {
+            const php = record.metrics?.PHP || {};
+            const usd = record.metrics?.USD || {};
+            [
+                php.payout_count, php.payout_principal, php.payout_charge, php.payout_fx_share,
+                usd.payout_count, usd.payout_principal, usd.payout_charge, usd.payout_fx_share,
+                php.sendout_count, php.sendout_principal, php.sendout_charge, php.sendout_fx_share,
+                usd.sendout_count, usd.sendout_principal, usd.sendout_charge, usd.sendout_fx_share
+            ].forEach((value, index) => {
+                totals[index] += Number(value || 0);
+            });
+        });
+        totals.forEach((value, index) => {
+            totalCells[index].textContent = index % 4 === 0
+                ? formatSummaryCount(value)
+                : formatSummaryAmount(value);
+        });
+        grandTotalRow.hidden = false;
     };
 
     const tabButtons = Array.from(document.querySelectorAll('[data-edi-tab]'));
@@ -719,7 +777,19 @@ try {
         }
     };
 
-    statusSelect?.addEventListener('change', updateBranchOptions);
+    const applyBranchStatusFilter = () => {
+        const selectedStatus = statusSelect.value.trim().toLocaleUpperCase();
+        document.querySelectorAll('#ediReportTableBody tr[data-branch-status]').forEach((row) => {
+            row.hidden = selectedStatus !== ''
+                && row.dataset.branchStatus !== selectedStatus;
+        });
+        const filteredRows = selectedStatus === ''
+            ? latestReportRows
+            : latestReportRows.filter((record) => String(record.ml_matic_status || '')
+                .trim().toLocaleUpperCase() === selectedStatus);
+        updateBranchDetailsGrandTotal(filteredRows);
+    };
+    statusSelect?.addEventListener('change', applyBranchStatusFilter);
     mainzoneSelect?.addEventListener('change', updateBranchOptions);
     zoneSelect?.addEventListener('change', updateBranchOptions);
     regionSelect?.addEventListener('change', updateBranchOptions);
@@ -728,18 +798,37 @@ try {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const generateButton = document.getElementById('ediReportGenerate');
+        const loadingCard = document.getElementById('ediReportLoadingCard');
+        const resultsContent = document.getElementById('ediReportResultsContent');
         const tableBody = document.getElementById('ediReportTableBody');
+        const grandTotalRow = document.getElementById('ediReportGrandTotalRow');
         if (!tableBody || !statusSelect) return;
+
+        if (grandTotalRow) {
+            grandTotalRow.hidden = true;
+            grandTotalRow.querySelectorAll('td').forEach((cell) => {
+                cell.innerHTML = '&nbsp;';
+            });
+        }
 
         const originalButtonText = generateButton?.textContent || 'Generate';
         if (generateButton) {
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
         }
+        if (loadingCard) {
+            const selectedPartner = partnerInput?.value.trim() || 'MoneyGram';
+            const partnerDisplay = selectedPartner.toLocaleUpperCase() === 'MONEYGRAM'
+                ? 'MoneyGram'
+                : selectedPartner;
+            loadingCard.textContent = `Loading ${partnerDisplay} EDI format...`;
+            loadingCard.hidden = false;
+        }
+        if (resultsContent) resultsContent.hidden = true;
 
         try {
             const params = new URLSearchParams({
-                status: statusSelect.value,
+                status: '',
                 mainzone: mainzoneSelect?.value || '',
                 zone: zoneSelect?.value || '',
                 region: regionSelect?.value || '',
@@ -767,7 +856,14 @@ try {
                 return;
             }
 
-            const fragment = document.createDocumentFragment();
+            const tableRowsHtml = [];
+            const escapeTableValue = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            })[character]);
             const formatCount = (value) => {
                 const number = Number(value || 0);
                 return number === 0 ? '' : new Intl.NumberFormat('en-US', {
@@ -782,40 +878,45 @@ try {
                 }).format(number);
             };
             payload.rows.forEach((record) => {
-                const row = document.createElement('tr');
                 const php = record.metrics?.PHP || {};
                 const usd = record.metrics?.USD || {};
+                const metricValues = [
+                    php.payout_count,
+                    php.payout_principal,
+                    php.payout_charge,
+                    php.payout_fx_share,
+                    usd.payout_count,
+                    usd.payout_principal,
+                    usd.payout_charge,
+                    usd.payout_fx_share,
+                    php.sendout_count,
+                    php.sendout_principal,
+                    php.sendout_charge,
+                    php.sendout_fx_share,
+                    usd.sendout_count,
+                    usd.sendout_principal,
+                    usd.sendout_charge,
+                    usd.sendout_fx_share
+                ];
                 const values = [
                     record.branch_id || '',
                     record.code || '',
                     record.branch_name || '',
                     record.region_description || '',
-                    formatCount(php.payout_count),
-                    formatAmount(php.payout_principal),
-                    formatAmount(php.payout_charge),
-                    formatAmount(php.payout_fx_share),
-                    formatCount(usd.payout_count),
-                    formatAmount(usd.payout_principal),
-                    formatAmount(usd.payout_charge),
-                    formatAmount(usd.payout_fx_share),
-                    formatCount(php.sendout_count),
-                    formatAmount(php.sendout_principal),
-                    formatAmount(php.sendout_charge),
-                    formatAmount(php.sendout_fx_share),
-                    formatCount(usd.sendout_count),
-                    formatAmount(usd.sendout_principal),
-                    formatAmount(usd.sendout_charge),
-                    formatAmount(usd.sendout_fx_share),
+                    ...metricValues.map((value, index) => index % 4 === 0
+                        ? formatCount(value)
+                        : formatAmount(value)),
                     record.ml_matic_status || ''
                 ];
-                values.forEach((value) => {
-                    const cell = document.createElement('td');
-                    cell.textContent = String(value);
-                    row.appendChild(cell);
-                });
-                fragment.appendChild(row);
+                const branchStatus = String(record.ml_matic_status || '').trim().toLocaleUpperCase();
+                tableRowsHtml.push(
+                    `<tr data-branch-status="${escapeTableValue(branchStatus)}">${values
+                        .map((value) => `<td>${escapeTableValue(value)}</td>`)
+                        .join('')}</tr>`
+                );
             });
-            tableBody.appendChild(fragment);
+            tableBody.innerHTML = tableRowsHtml.join('');
+            applyBranchStatusFilter();
         } catch (error) {
             latestReportRows = [];
             updateEdiVolumeSummary([]);
@@ -831,6 +932,8 @@ try {
                 generateButton.disabled = false;
                 generateButton.textContent = originalButtonText;
             }
+            if (loadingCard) loadingCard.hidden = true;
+            if (resultsContent) resultsContent.hidden = false;
         }
     });
 
