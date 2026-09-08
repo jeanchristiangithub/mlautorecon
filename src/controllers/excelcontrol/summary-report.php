@@ -508,13 +508,12 @@ function summary_fetch_moneygram_settlement_daily_data(
 
 function summary_fetch_moneygram_settlement_report(PDO $pdo, string $startDate, string $endDate, string $currency): array
 {
-    // Volume represents the number of settlement rows. Cancelled payout and
-    // sendout rows still count as transactions even though their monetary
-    // amounts are subtracted in the net amount calculations below.
+    // Volume is net of cancellations and refunds, consistent with the monetary
+    // calculations below.
     $payoutVolumeExpression =
-        "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN ('REC', 'RRC') THEN 1 ELSE 0 END)";
+        "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) = 'REC' THEN 1 WHEN UPPER(TRIM(psd.tran_type)) = 'RRC' THEN -1 ELSE 0 END)";
     $sendoutVolumeExpression =
-        "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) IN ('SEN', 'RSN', 'REF') THEN 1 ELSE 0 END)";
+        "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) = 'SEN' THEN 1 WHEN UPPER(TRIM(psd.tran_type)) IN ('RSN', 'REF') THEN -1 ELSE 0 END)";
     $amountFields = [
         'principal' => 'base_tran_amt',
         'fee' => 'fee_tran_amt',

@@ -777,19 +777,7 @@ try {
         }
     };
 
-    const applyBranchStatusFilter = () => {
-        const selectedStatus = statusSelect.value.trim().toLocaleUpperCase();
-        document.querySelectorAll('#ediReportTableBody tr[data-branch-status]').forEach((row) => {
-            row.hidden = selectedStatus !== ''
-                && row.dataset.branchStatus !== selectedStatus;
-        });
-        const filteredRows = selectedStatus === ''
-            ? latestReportRows
-            : latestReportRows.filter((record) => String(record.ml_matic_status || '')
-                .trim().toLocaleUpperCase() === selectedStatus);
-        updateBranchDetailsGrandTotal(filteredRows);
-    };
-    statusSelect?.addEventListener('change', applyBranchStatusFilter);
+    statusSelect?.addEventListener('change', updateBranchOptions);
     mainzoneSelect?.addEventListener('change', updateBranchOptions);
     zoneSelect?.addEventListener('change', updateBranchOptions);
     regionSelect?.addEventListener('change', updateBranchOptions);
@@ -828,7 +816,7 @@ try {
 
         try {
             const params = new URLSearchParams({
-                status: '',
+                status: statusSelect.value,
                 mainzone: mainzoneSelect?.value || '',
                 zone: zoneSelect?.value || '',
                 region: regionSelect?.value || '',
@@ -916,7 +904,7 @@ try {
                 );
             });
             tableBody.innerHTML = tableRowsHtml.join('');
-            applyBranchStatusFilter();
+            updateBranchDetailsGrandTotal(latestReportRows);
         } catch (error) {
             latestReportRows = [];
             updateEdiVolumeSummary([]);

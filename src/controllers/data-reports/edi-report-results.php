@@ -100,19 +100,31 @@ try {
         FROM windowed_moneygram_data mg
     ), branch_cte AS (
         SELECT mbp_branch_id, mbp_code,
-               COALESCE(mbp_branch_name_description, mbp_mlmatic_branch_name,
-                        mkpxbm_branch_name) AS branch_name,
+               COALESCE(
+                   NULLIF(TRIM(mbp_mlmatic_branch_name), ''),
+                   NULLIF(TRIM(mkpxbm_branch_name), ''),
+                   NULLIF(TRIM(mbp_branch_name_description), ''),
+                   ''
+               ) AS branch_name,
+               COALESCE(
+                   NULLIF(TRIM(mbp_gl_region), ''),
+                   NULLIF(TRIM(mrm_region_description), ''),
+                   ''
+               ) AS region_description,
                mbp_mlmatic_status, mbp_mainzone, mbp_zone, mbp_region_code,
-               mbp_gl_region, mbp_mlmatic_region
+               mbp_mlmatic_region
         FROM filerecondb.corporate_branch_status_history
         WHERE posted_date >= ? AND posted_date < ?
     ), report_data AS (
-        SELECT mg.*, h.mbp_code AS code, h.branch_name,
+        SELECT h.mbp_branch_id AS branch_id, h.mbp_code AS code, h.branch_name,
                h.mbp_mlmatic_status AS ml_matic_status,
-               h.mbp_mainzone AS mainzone, h.mbp_gl_region AS region_description,
-               h.mbp_mlmatic_region AS ml_matic_region
-        FROM resolved_moneygram_data mg
-        LEFT JOIN branch_cte h
+               h.mbp_mainzone AS mainzone, h.region_description,
+               h.mbp_mlmatic_region AS ml_matic_region,
+               mg.tran_date, mg.tran_type, mg.settlement_currency,
+               mg.transaction_currency, mg.reference_id,
+               mg.base_amt, mg.comm_amt, mg.fx_rev_share_amt
+        FROM branch_cte h
+        LEFT JOIN resolved_moneygram_data mg
             ON h.mbp_branch_id COLLATE utf8mb4_0900_ai_ci
              = mg.branch_id COLLATE utf8mb4_0900_ai_ci
         WHERE 1 = 1";
@@ -161,7 +173,7 @@ try {
     }
 
     if ($branchId !== '') {
-        $sql .= ' AND TRIM(mg.branch_id) = TRIM(?)';
+        $sql .= ' AND TRIM(h.mbp_branch_id) = TRIM(?)';
         $parameters[] = $branchId;
     }
 

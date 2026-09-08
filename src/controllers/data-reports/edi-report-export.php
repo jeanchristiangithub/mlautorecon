@@ -28,21 +28,23 @@ try {
 
         $topHeaders = [
             'A' => 'BRANCH ID', 'B' => 'CODE', 'C' => 'BRANCH NAME',
-            'D' => 'MONEYGRAM PO PHP', 'E' => 'MONEYGRAM PO PHP',
-            'F' => 'MONEYGRAM PO PHP', 'G' => 'MONEYGRAM PO PHP',
-            'H' => 'MONEYGRAM PO USD', 'I' => 'MONEYGRAM PO USD',
-            'J' => 'MONEYGRAM PO USD', 'K' => 'MONEYGRAM PO USD',
-            'L' => 'MONEYGRAM SO PHP', 'M' => 'MONEYGRAM SO PHP',
-            'N' => 'MONEYGRAM SO PHP', 'O' => 'MONEYGRAM SO PHP',
-            'P' => 'MONEYGRAM SO USD', 'Q' => 'MONEYGRAM SO USD',
-            'R' => 'MONEYGRAM SO USD', 'S' => 'MONEYGRAM SO USD',
+            'D' => 'REGION DESCRIPTION',
+            'E' => 'MONEYGRAM PO PHP', 'F' => 'MONEYGRAM PO PHP',
+            'G' => 'MONEYGRAM PO PHP', 'H' => 'MONEYGRAM PO PHP',
+            'I' => 'MONEYGRAM PO USD', 'J' => 'MONEYGRAM PO USD',
+            'K' => 'MONEYGRAM PO USD', 'L' => 'MONEYGRAM PO USD',
+            'M' => 'MONEYGRAM SO PHP', 'N' => 'MONEYGRAM SO PHP',
+            'O' => 'MONEYGRAM SO PHP', 'P' => 'MONEYGRAM SO PHP',
+            'Q' => 'MONEYGRAM SO USD', 'R' => 'MONEYGRAM SO USD',
+            'S' => 'MONEYGRAM SO USD', 'T' => 'MONEYGRAM SO USD',
+            'U' => 'BRANCH STATUS',
         ];
         foreach ($topHeaders as $column => $label) {
             $sheet->setCellValue($column . '1', $label);
         }
         $subHeaders = ['COUNT', 'PRINCIPAL', 'CHARGE', 'FX SHARE'];
-        foreach (range(4, 19) as $columnIndex) {
-            $sheet->setCellValue([$columnIndex, 2], $subHeaders[($columnIndex - 4) % 4]);
+        foreach (range(5, 20) as $columnIndex) {
+            $sheet->setCellValue([$columnIndex, 2], $subHeaders[($columnIndex - 5) % 4]);
         }
 
         $rowNumber = 3;
@@ -53,6 +55,7 @@ try {
             $values = [
                 (string) ($record['branch_id'] ?? ''), (string) ($record['code'] ?? ''),
                 (string) ($record['branch_name'] ?? ''),
+                (string) ($record['region_description'] ?? ''),
                 $php['payout_count'] ?? 0, $php['payout_principal'] ?? 0,
                 $php['payout_charge'] ?? 0, $php['payout_fx_share'] ?? 0,
                 $usd['payout_count'] ?? 0, $usd['payout_principal'] ?? 0,
@@ -61,10 +64,11 @@ try {
                 $php['sendout_charge'] ?? 0, $php['sendout_fx_share'] ?? 0,
                 $usd['sendout_count'] ?? 0, $usd['sendout_principal'] ?? 0,
                 $usd['sendout_charge'] ?? 0, $usd['sendout_fx_share'] ?? 0,
+                (string) ($record['ml_matic_status'] ?? ''),
             ];
             foreach ($values as $offset => $value) {
                 $columnIndex = $offset + 1;
-                if ($columnIndex <= 3) {
+                if ($columnIndex <= 4 || $columnIndex === 21) {
                     $sheet->setCellValueExplicit([$columnIndex, $rowNumber], (string) $value, DataType::TYPE_STRING);
                 } else {
                     $sheet->setCellValue([$columnIndex, $rowNumber], (float) $value);
@@ -76,28 +80,28 @@ try {
         $dataLastRow = $rowNumber - 1;
         $lastRow = max(3, $dataLastRow);
         $totalRow = $dataLastRow >= 3 ? $dataLastRow + 2 : 3;
-        $sheet->setCellValue('C' . $totalRow, 'TOTAL');
-        foreach (range('D', 'S') as $column) {
+        $sheet->setCellValue('D' . $totalRow, 'TOTAL');
+        foreach (range('E', 'T') as $column) {
             $sheet->setCellValue(
                 $column . $totalRow,
                 $dataLastRow >= 3 ? '=SUM(' . $column . '3:' . $column . $dataLastRow . ')' : 0
             );
         }
-        $sheet->getStyle('A1:S2')->getFont()->setBold(true);
-        $sheet->getStyle('A1:S2')->getAlignment()
+        $sheet->getStyle('A1:U2')->getFont()->setBold(true);
+        $sheet->getStyle('A1:U2')->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A1:S' . $lastRow)->getBorders()->getAllBorders()
+        $sheet->getStyle('A1:U' . $lastRow)->getBorders()->getAllBorders()
             ->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getStyle('C' . $totalRow . ':S' . $totalRow)->getFont()->setBold(true);
-        $sheet->getStyle('C' . $totalRow . ':S' . $totalRow)->getBorders()->getTop()
+        $sheet->getStyle('D' . $totalRow . ':T' . $totalRow)->getFont()->setBold(true);
+        $sheet->getStyle('D' . $totalRow . ':T' . $totalRow)->getBorders()->getTop()
             ->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getStyle('D3:S' . $totalRow)->getNumberFormat()->setFormatCode('#,##0.00;[Red]-#,##0.00');
-        foreach (['D', 'H', 'L', 'P'] as $countColumn) {
+        $sheet->getStyle('E3:T' . $totalRow)->getNumberFormat()->setFormatCode('#,##0.00;[Red]-#,##0.00');
+        foreach (['E', 'I', 'M', 'Q'] as $countColumn) {
             $sheet->getStyle($countColumn . '3:' . $countColumn . $totalRow)->getNumberFormat()->setFormatCode('#,##0');
         }
-        $sheet->freezePane('D3');
-        foreach (range('A', 'S') as $column) {
+        $sheet->freezePane('A3');
+        foreach (range('A', 'U') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
         $sheetIndex++;

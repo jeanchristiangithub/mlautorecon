@@ -126,6 +126,25 @@ function kpxDuplicateSignature(array $row): string
     return implode("\x1F", $parts);
 }
 
+function kpxUnlockedOverwriteSignatures(array $row): array
+{
+    $signatures = [kpxDuplicateSignature($row)];
+    $ccref = trim((string)($row['ccref_no'] ?? ''));
+    $dateCancelled = kpxNormalizedDateOnly($row['date_cancelled'] ?? null);
+    $dateClaimed = kpxNormalizedDateOnly($row['date_claimed'] ?? null);
+    $dateSend = kpxNormalizedDateOnly($row['date_send'] ?? null);
+
+    // A cancellation report replaces the original transaction report:
+    // POC -> PO by CCREF + DATE CLAIMED; SOC -> SO by CCREF + DATE SEND.
+    if ($dateCancelled !== '' && $dateClaimed !== '') {
+        $signatures[] = implode("\x1F", [$ccref, 'DATE_CLAIMED', $dateClaimed]);
+    } elseif ($dateCancelled !== '' && $dateSend !== '') {
+        $signatures[] = implode("\x1F", [$ccref, 'DATE_SEND', $dateSend]);
+    }
+
+    return array_values(array_unique($signatures));
+}
+
 function kpxNormalizedDateOnly(mixed $value): string
 {
     $text = trim((string)$value);
@@ -262,7 +281,7 @@ function kpxLoadDuplicateRows(PDO $pdo, array $rows): array
 /**
  * Add-on lookup for the explicit MoneyGram re-upload workflow. An unlocked
  * prior row is identified only by CCREF and its transaction-type dates;
- * both status 1 and legacy NULL status rows qualify when unlocked. Amount and
+ * status 1, status 2, and legacy NULL status rows qualify when unlocked. Amount and
  * other editable values must not prevent the overwrite prompt.
  */
 function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
@@ -283,7 +302,7 @@ function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
             . 'FROM ml_web_data '
             . "WHERE UPPER(TRIM(COALESCE(partnerName, ''))) = 'MONEYGRAM' "
             . 'AND ccref_no IN (' . $placeholders . ') '
-            . "AND (match_status = 1 OR match_status IS NULL) "
+            . "AND (match_status IN (1, 2) OR match_status IS NULL) "
             . "AND COALESCE(is_data_locked, '0') = '0' "
             . 'ORDER BY (match_status = 1) DESC, id ASC'
         );
@@ -302,9 +321,15 @@ function kpxLoadUnlockedOverwriteRows(PDO $pdo, array $rows): array
 
     $matches = [];
     foreach ($rows as $row) {
-        $matches[] = is_array($row)
-            ? ($rowBySignature[kpxDuplicateSignature($row)] ?? ['id' => 0, 'match_status' => 0, 'is_data_locked' => '0'])
-            : ['id' => 0, 'match_status' => 0, 'is_data_locked' => '0'];
+        $match = ['id' => 0, 'match_status' => 0, 'is_data_locked' => '0'];
+        if (is_array($row)) {
+            foreach (kpxUnlockedOverwriteSignatures($row) as $signature) {
+                if (!isset($rowBySignature[$signature])) continue;
+                $match = $rowBySignature[$signature];
+                break;
+            }
+        }
+        $matches[] = $match;
     }
     return $matches;
 }
@@ -418,7 +443,9 @@ try {
             && strtoupper(trim((string)($rows[$rowIndex]['partnerName'] ?? ''))) === 'MONEYGRAM';
         if (($isMoneygram && (int)($unlockedOverwriteRow['id'] ?? 0) > 0)
             || (!$isMoneygram && $id > 0)) {
-            $overwriteCandidateIds[] = $id;
+            $overwriteCandidateIds[] = $isMoneygram
+                ? (int)$unlockedOverwriteRow['id']
+                : $id;
         }
     }
 
