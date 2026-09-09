@@ -372,6 +372,7 @@ try {
     ) ?>;
     const exportButton = document.getElementById('ediReportExportExcel');
     let latestReportRows = [];
+    let latestWebSummary = {};
 
     const formatSummaryCount = (value) => {
         const number = Number(value || 0);
@@ -386,7 +387,7 @@ try {
             maximumFractionDigits: 2
         }).format(number);
     };
-    const updateEdiVolumeSummary = (rows = []) => {
+    const updateEdiVolumeSummary = (rows = [], webSummary = {}) => {
         const totals = {
             VISMIN: {},
             LNCR: {}
@@ -418,6 +419,19 @@ try {
             const flow = summaryRow.dataset.summaryFlow;
             const currency = summaryRow.dataset.summaryCurrency;
             const cells = Array.from(summaryRow.querySelectorAll('td'));
+            const webValues = webSummary?.[flow]?.[currency] || {};
+            [
+                webValues.volume,
+                webValues.principal,
+                webValues.charge,
+                webValues.fx_share
+            ].forEach((value, metricIndex) => {
+                const cell = cells[metricIndex];
+                if (!cell) return;
+                cell.textContent = metricIndex === 0
+                    ? formatSummaryCount(value)
+                    : formatSummaryAmount(value);
+            });
             ['VISMIN', 'LNCR'].forEach((mainzone, mainzoneIndex) => {
                 const values = totals[mainzone][`${flow}-${currency}`] || [0, 0, 0, 0];
                 const ediStartIndex = 4 + (mainzoneIndex * 4);
@@ -429,11 +443,44 @@ try {
                         : formatSummaryAmount(value);
                 });
             });
+            const visminValues = totals.VISMIN[`${flow}-${currency}`] || [0, 0, 0, 0];
+            const lncrValues = totals.LNCR[`${flow}-${currency}`] || [0, 0, 0, 0];
+            [
+                webValues.volume,
+                webValues.principal,
+                webValues.charge,
+                webValues.fx_share
+            ].forEach((webValue, metricIndex) => {
+                const variance = Number(webValue || 0)
+                    - Number(visminValues[metricIndex] || 0)
+                    - Number(lncrValues[metricIndex] || 0);
+                const cell = cells[18 + metricIndex];
+                if (!cell) return;
+                cell.textContent = metricIndex === 0
+                    ? formatSummaryCount(variance)
+                    : formatSummaryAmount(variance);
+            });
         });
 
         const grandTotalCells = Array.from(document.querySelectorAll(
             '.edi-report-summary-total-row td'
         ));
+        const webGrandTotals = [0, 0, 0, 0];
+        Object.values(webSummary).forEach((flowSummary) => {
+            Object.values(flowSummary || {}).forEach((values) => {
+                [values.volume, values.principal, values.charge, values.fx_share]
+                    .forEach((value, metricIndex) => {
+                        webGrandTotals[metricIndex] += Number(value || 0);
+                    });
+            });
+        });
+        webGrandTotals.forEach((value, metricIndex) => {
+            const cell = grandTotalCells[metricIndex];
+            if (!cell) return;
+            cell.textContent = metricIndex === 0
+                ? formatSummaryCount(value)
+                : formatSummaryAmount(value);
+        });
         ['VISMIN', 'LNCR'].forEach((mainzone, mainzoneIndex) => {
             const grandTotals = [0, 0, 0, 0];
             Object.values(totals[mainzone]).forEach((values) => {
@@ -449,6 +496,19 @@ try {
                     ? formatSummaryCount(value)
                     : formatSummaryAmount(value);
             });
+        });
+        webGrandTotals.forEach((webValue, metricIndex) => {
+            const ediValue = ['VISMIN', 'LNCR'].reduce((total, mainzone) => {
+                return total + Object.values(totals[mainzone]).reduce((mainzoneTotal, values) => {
+                    return mainzoneTotal + Number(values[metricIndex] || 0);
+                }, 0);
+            }, 0);
+            const variance = webValue - ediValue;
+            const cell = grandTotalCells[18 + metricIndex];
+            if (!cell) return;
+            cell.textContent = metricIndex === 0
+                ? formatSummaryCount(variance)
+                : formatSummaryAmount(variance);
         });
     };
 
@@ -833,7 +893,8 @@ try {
 
             tableBody.replaceChildren();
             latestReportRows = payload.rows;
-            updateEdiVolumeSummary(payload.rows);
+            latestWebSummary = payload.web_summary || {};
+            updateEdiVolumeSummary(payload.rows, latestWebSummary);
             if (exportButton) exportButton.disabled = payload.rows.length === 0;
             if (payload.rows.length === 0) {
                 const row = tableBody.insertRow();
@@ -907,6 +968,7 @@ try {
             updateBranchDetailsGrandTotal(latestReportRows);
         } catch (error) {
             latestReportRows = [];
+            latestWebSummary = {};
             updateEdiVolumeSummary([]);
             if (exportButton) exportButton.disabled = true;
             tableBody.replaceChildren();
@@ -936,7 +998,8 @@ try {
                 headers: { 'Content-Type': 'application/json', Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
                 body: JSON.stringify({
                     month: document.getElementById('ediReportMonth')?.value || '',
-                    rows: latestReportRows
+                    rows: latestReportRows,
+                    web_summary: latestWebSummary
                 })
             });
             if (!response.ok) throw new Error('Unable to export the EDI report.');

@@ -18,9 +18,6 @@ try {
     }
     $monthStart = $month . '-01';
     $nextMonthStart = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
-    // Match the branch-history snapshot day used by the supplied report query.
-    $snapshotStart = $month . '-22';
-    $snapshotEnd = (new DateTimeImmutable($snapshotStart))->modify('+1 day')->format('Y-m-d');
 
     $sql = "WITH moneygram_source_data AS (
         SELECT mpd.agent_name, mpd.tran_date, mpd.tran_type,
@@ -114,7 +111,12 @@ try {
                mbp_mlmatic_status, mbp_mainzone, mbp_zone, mbp_region_code,
                mbp_mlmatic_region
         FROM filerecondb.corporate_branch_status_history
-        WHERE posted_date >= ? AND posted_date < ?
+        WHERE posted_date = (
+            SELECT MAX(snapshot.posted_date)
+            FROM filerecondb.corporate_branch_status_history snapshot
+            WHERE snapshot.posted_date >= ?
+              AND snapshot.posted_date < ?
+        )
     ), report_data AS (
         SELECT h.mbp_branch_id AS branch_id, h.mbp_code AS code, h.branch_name,
                h.mbp_mlmatic_status AS ml_matic_status,
@@ -137,8 +139,8 @@ try {
         $nextMonthStart,
         $monthStart,
         $nextMonthStart,
-        $snapshotStart,
-        $snapshotEnd,
+        $monthStart,
+        $nextMonthStart,
     ];
     $mainzoneColumn = 'h.mbp_mainzone';
     $zoneColumn = 'h.mbp_zone';
@@ -232,7 +234,90 @@ try {
     }
     $branchRows = array_values($branches);
 
-    echo json_encode(['success' => true, 'rows' => $branchRows]);
+    $webSummarySql = "WITH web_report_source AS (
+        SELECT mpd.tran_type, mpd.transaction_currency,
+               mpd.base_amt, mpd.comm_amt, mpd.fx_rev_share_amt
+        FROM filerecondb.moneygram_partner_data mpd
+        WHERE mpd.tran_date >= ? AND mpd.tran_date < ?
+
+        UNION ALL
+
+        SELECT psd.tran_type, psd.transaction_currency,
+               psd.base_tran_amt AS base_amt,
+               psd.comm_tran_amt AS comm_amt,
+               psd.fx_rev_share_tran_amt AS fx_rev_share_amt
+        FROM filerecondb.partner_settlement_data psd
+        WHERE UPPER(TRIM(COALESCE(psd.partner_name, ''))) = 'MONEYGRAM'
+          AND (
+              (psd.tran_date >= ? AND psd.tran_date < ?)
+              OR (psd.settled_date >= ? AND psd.settled_date < ?)
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM filerecondb.moneygram_partner_data existing
+              WHERE existing.reference_id COLLATE utf8mb4_0900_ai_ci
+                    = psd.reference_id COLLATE utf8mb4_0900_ai_ci
+                AND (
+                    DATE(existing.tran_date) = DATE(psd.tran_date)
+                    OR DATE(existing.tran_date) = DATE(psd.settled_date)
+                )
+          )
+    )
+    SELECT
+        CASE
+            WHEN UPPER(TRIM(tran_type)) IN ('REC', 'RRC') THEN 'payout'
+            WHEN UPPER(TRIM(tran_type)) IN ('SEN', 'RSN', 'REF') THEN 'sendout'
+            ELSE NULL
+        END AS flow,
+        UPPER(TRIM(transaction_currency)) AS currency,
+        SUM(CASE
+            WHEN UPPER(TRIM(tran_type)) IN ('REC', 'SEN') THEN 1
+            WHEN UPPER(TRIM(tran_type)) IN ('RRC', 'RSN', 'REF') THEN -1
+            ELSE 0
+        END) AS volume,
+        SUM(CASE
+            WHEN UPPER(TRIM(tran_type)) IN ('REC', 'SEN') THEN ABS(COALESCE(base_amt, 0))
+            WHEN UPPER(TRIM(tran_type)) IN ('RRC', 'RSN', 'REF') THEN -ABS(COALESCE(base_amt, 0))
+            ELSE 0
+        END) AS principal,
+        SUM(CASE
+            WHEN UPPER(TRIM(tran_type)) IN ('REC', 'SEN') THEN ABS(COALESCE(comm_amt, 0))
+            WHEN UPPER(TRIM(tran_type)) IN ('RRC', 'RSN', 'REF') THEN -ABS(COALESCE(comm_amt, 0))
+            ELSE 0
+        END) AS charge,
+        SUM(CASE
+            WHEN UPPER(TRIM(tran_type)) IN ('REC', 'SEN') THEN ABS(COALESCE(fx_rev_share_amt, 0))
+            WHEN UPPER(TRIM(tran_type)) IN ('RRC', 'RSN', 'REF') THEN -ABS(COALESCE(fx_rev_share_amt, 0))
+            ELSE 0
+        END) AS fx_share
+    FROM web_report_source
+    GROUP BY flow, currency
+    HAVING flow IS NOT NULL AND currency IN ('PHP', 'USD')";
+    $webSummaryStatement = fileRecDbConnection()->prepare($webSummarySql);
+    $webSummaryStatement->execute([
+        $monthStart,
+        $nextMonthStart,
+        $monthStart,
+        $nextMonthStart,
+        $monthStart,
+        $nextMonthStart,
+    ]);
+
+    $webSummary = [];
+    while ($summaryRow = $webSummaryStatement->fetch(PDO::FETCH_ASSOC)) {
+        $webSummary[(string) $summaryRow['flow']][(string) $summaryRow['currency']] = [
+            'volume' => (int) $summaryRow['volume'],
+            'principal' => (float) $summaryRow['principal'],
+            'charge' => (float) $summaryRow['charge'],
+            'fx_share' => (float) $summaryRow['fx_share'],
+        ];
+    }
+
+    echo json_encode([
+        'success' => true,
+        'rows' => $branchRows,
+        'web_summary' => $webSummary,
+    ]);
 } catch (InvalidArgumentException $exception) {
     http_response_code(422);
     echo json_encode(['success' => false, 'error' => $exception->getMessage()]);

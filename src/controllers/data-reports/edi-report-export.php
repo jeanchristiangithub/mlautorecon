@@ -12,18 +12,122 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 try {
     $payload = json_decode((string) file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
     $rows = is_array($payload['rows'] ?? null) ? $payload['rows'] : [];
+    $webSummary = is_array($payload['web_summary'] ?? null) ? $payload['web_summary'] : [];
     $month = preg_match('/^\d{4}-\d{2}$/', (string) ($payload['month'] ?? ''))
         ? (string) $payload['month']
         : date('Y-m');
 
     $spreadsheet = new Spreadsheet();
+    $summarySheet = $spreadsheet->getActiveSheet();
+    $summarySheet->setTitle('VOLUME SUMMARY');
+
+    $summarySheet->setCellValue('A1', 'CORPORATE PARTNER');
+    $summarySheet->setCellValue('B1', 'WEB REPORT');
+    $summarySheet->setCellValue('F1', 'EDI');
+    $summarySheet->setCellValue('N1', 'ADDITIONAL');
+    $summarySheet->setCellValue('T1', 'VARIANCE');
+    $summarySheet->mergeCells('A1:A3');
+    $summarySheet->mergeCells('B1:E1');
+    $summarySheet->mergeCells('F1:M1');
+    $summarySheet->mergeCells('N1:S1');
+    $summarySheet->mergeCells('T1:W1');
+    $summarySheet->setCellValue('F2', 'VISMIN');
+    $summarySheet->setCellValue('J2', 'LNCR');
+    $summarySheet->setCellValue('N2', 'VISMIN');
+    $summarySheet->setCellValue('Q2', 'LNCR');
+    $summarySheet->mergeCells('F2:I2');
+    $summarySheet->mergeCells('J2:M2');
+    $summarySheet->mergeCells('N2:P2');
+    $summarySheet->mergeCells('Q2:S2');
+    foreach (['B', 'C', 'D', 'E', 'T', 'U', 'V', 'W'] as $column) {
+        $summarySheet->mergeCells($column . '2:' . $column . '3');
+    }
+    foreach (['B', 'F', 'J', 'T'] as $startColumn) {
+        $startIndex = PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($startColumn);
+        foreach (['VOLUME', 'PRINCIPAL', 'CHARGE', 'FX SHARE'] as $offset => $heading) {
+            $summarySheet->setCellValue([$startIndex + $offset, $startColumn === 'B' || $startColumn === 'T' ? 2 : 3], $heading);
+        }
+    }
+    foreach (['N', 'Q'] as $startColumn) {
+        $startIndex = PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($startColumn);
+        foreach (['VOLUME', 'PRINCIPAL', 'CHARGE'] as $offset => $heading) {
+            $summarySheet->setCellValue([$startIndex + $offset, 3], $heading);
+        }
+    }
+
+    $ediSummary = [];
+    foreach (['VISMIN', 'LNCR'] as $mainzone) {
+        foreach (['payout', 'sendout'] as $flow) {
+            foreach (['PHP', 'USD'] as $currency) {
+                $ediSummary[$mainzone][$flow][$currency] = [0.0, 0.0, 0.0, 0.0];
+            }
+        }
+    }
+    foreach ($rows as $record) {
+        $mainzone = strtoupper(trim((string) ($record['mainzone'] ?? '')));
+        if (!isset($ediSummary[$mainzone])) continue;
+        foreach (['payout', 'sendout'] as $flow) {
+            foreach (['PHP', 'USD'] as $currency) {
+                $metrics = is_array($record['metrics'][$currency] ?? null) ? $record['metrics'][$currency] : [];
+                foreach (['count', 'principal', 'charge', 'fx_share'] as $index => $metric) {
+                    $ediSummary[$mainzone][$flow][$currency][$index] += (float) ($metrics[$flow . '_' . $metric] ?? 0);
+                }
+            }
+        }
+    }
+
+    $summaryDefinitions = [
+        ['MONEYGRAM PAYOUT - PHP', 'payout', 'PHP'],
+        ['MONEYGRAM PAYOUT - USD', 'payout', 'USD'],
+        ['MONEYGRAM SENDOUT - PHP', 'sendout', 'PHP'],
+        ['MONEYGRAM SENDOUT - USD', 'sendout', 'USD'],
+    ];
+    foreach ($summaryDefinitions as $offset => [$label, $flow, $currency]) {
+        $rowNumber = 4 + $offset;
+        $web = is_array($webSummary[$flow][$currency] ?? null) ? $webSummary[$flow][$currency] : [];
+        $webValues = [
+            (float) ($web['volume'] ?? 0), (float) ($web['principal'] ?? 0),
+            (float) ($web['charge'] ?? 0), (float) ($web['fx_share'] ?? 0),
+        ];
+        $vismin = $ediSummary['VISMIN'][$flow][$currency];
+        $lncr = $ediSummary['LNCR'][$flow][$currency];
+        $variance = array_map(
+            static fn(float $value, int $index): float => $value - $vismin[$index] - $lncr[$index],
+            $webValues,
+            array_keys($webValues)
+        );
+        $summarySheet->setCellValue('A' . $rowNumber, $label);
+        foreach ([2 => $webValues, 6 => $vismin, 10 => $lncr, 20 => $variance] as $startColumn => $values) {
+            foreach ($values as $valueOffset => $value) {
+                $summarySheet->setCellValue([$startColumn + $valueOffset, $rowNumber], $value);
+            }
+        }
+    }
+    $summaryTotalRow = 9;
+    $summarySheet->setCellValue('A' . $summaryTotalRow, 'GRAND TOTAL:');
+    foreach (array_merge(range('B', 'M'), range('T', 'W')) as $column) {
+        $summarySheet->setCellValue($column . $summaryTotalRow, '=SUM(' . $column . '4:' . $column . '7)');
+    }
+    $summarySheet->getStyle('A1:W3')->getFont()->setBold(true);
+    $summarySheet->getStyle('A1:W3')->getAlignment()
+        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+        ->setVertical(Alignment::VERTICAL_CENTER);
+    $summarySheet->getStyle('A1:W7')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    $summarySheet->getStyle('A' . $summaryTotalRow . ':W' . $summaryTotalRow)->getFont()->setBold(true);
+    $summarySheet->getStyle('A' . $summaryTotalRow . ':W' . $summaryTotalRow)->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
+    $summarySheet->getStyle('B4:W' . $summaryTotalRow)->getNumberFormat()->setFormatCode('#,##0.00;[Red]-#,##0.00');
+    foreach (['B', 'F', 'J', 'N', 'Q', 'T'] as $countColumn) {
+        $summarySheet->getStyle($countColumn . '4:' . $countColumn . $summaryTotalRow)->getNumberFormat()->setFormatCode('#,##0;[Red]-#,##0');
+    }
+    $summarySheet->freezePane('B4');
+    foreach (range('A', 'W') as $column) {
+        $summarySheet->getColumnDimension($column)->setAutoSize(true);
+    }
+
     $sheetNames = ['VISMIN EDI' => 'VISMIN', 'LNCR EDI' => 'LNCR'];
-    $sheetIndex = 0;
 
     foreach ($sheetNames as $sheetName => $mainzone) {
-        $sheet = $sheetIndex === 0
-            ? $spreadsheet->getActiveSheet()
-            : $spreadsheet->createSheet();
+        $sheet = $spreadsheet->createSheet();
         $sheet->setTitle($sheetName);
 
         $topHeaders = [
@@ -104,7 +208,6 @@ try {
         foreach (range('A', 'U') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
-        $sheetIndex++;
     }
 
     $spreadsheet->setActiveSheetIndex(0);
