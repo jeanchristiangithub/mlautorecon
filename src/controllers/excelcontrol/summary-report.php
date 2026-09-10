@@ -530,9 +530,16 @@ function summary_fetch_moneygram_settlement_report(PDO $pdo, string $startDate, 
     ];
     foreach ($amountFields as $key => $column) {
         $qualifiedColumn = 'psd.' . summary_quote_identifier($column);
-        $numeric = 'ABS(CAST(REPLACE(REPLACE(REPLACE(COALESCE(' . $qualifiedColumn . ', 0), ",", ""), "PHP", ""), "$", "") AS DECIMAL(18, 2)))';
+        $rawNumeric = 'CAST(REPLACE(REPLACE(REPLACE(COALESCE(' . $qualifiedColumn . ', 0), ",", ""), "PHP", ""), "$", "") AS DECIMAL(18, 2))';
+        $numeric = 'ABS(' . $rawNumeric . ')';
+        // MoneyGram Sendout FX revenue shares are represented as negative
+        // source values. A positive SEN value is not an earned FX share and
+        // must not be included in the monthly commission.
+        $sendoutNumeric = $key === 'fx'
+            ? '(CASE WHEN ' . $rawNumeric . ' <= 0 THEN ' . $numeric . ' ELSE 0 END)'
+            : $numeric;
         $selects[] = "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) = 'REC' THEN {$numeric} WHEN UPPER(TRIM(psd.tran_type)) = 'RRC' THEN -{$numeric} ELSE 0 END) AS payout_{$key}";
-        $selects[] = "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) = 'SEN' THEN {$numeric} WHEN UPPER(TRIM(psd.tran_type)) IN ('RSN', 'REF') THEN -{$numeric} ELSE 0 END) AS sendout_{$key}";
+        $selects[] = "SUM(CASE WHEN UPPER(TRIM(psd.tran_type)) = 'SEN' THEN {$sendoutNumeric} WHEN UPPER(TRIM(psd.tran_type)) IN ('RSN', 'REF') THEN -{$numeric} ELSE 0 END) AS sendout_{$key}";
     }
 
     $sql = 'SELECT ' . implode(', ', $selects)
