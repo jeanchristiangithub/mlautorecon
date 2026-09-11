@@ -13,9 +13,30 @@ try {
     $payload = json_decode((string) file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
     $rows = is_array($payload['rows'] ?? null) ? $payload['rows'] : [];
     $webSummary = is_array($payload['web_summary'] ?? null) ? $payload['web_summary'] : [];
-    $month = preg_match('/^\d{4}-\d{2}$/', (string) ($payload['month'] ?? ''))
-        ? (string) $payload['month']
-        : date('Y-m');
+    $partner = trim((string) ($payload['partner'] ?? ''));
+    $timeFrame = trim((string) ($payload['time_frame'] ?? ''));
+    $date = trim((string) ($payload['date'] ?? ''));
+    $startDate = trim((string) ($payload['start_date'] ?? ''));
+    $endDate = trim((string) ($payload['end_date'] ?? ''));
+    $month = trim((string) ($payload['month'] ?? ''));
+    $validDate = static function (string $value): bool {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        return $parsed !== false && $parsed->format('Y-m-d') === $value;
+    };
+    if ($timeFrame === 'Daily' && $validDate($date)) {
+        $periodLabel = $date;
+    } elseif (
+        $timeFrame === 'Date Range'
+        && $validDate($startDate)
+        && $validDate($endDate)
+        && $startDate <= $endDate
+    ) {
+        $periodLabel = $startDate . '_to_' . $endDate;
+    } elseif ($timeFrame === 'Monthly' && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+        $periodLabel = $month;
+    } else {
+        throw new InvalidArgumentException('A valid Time Frame period is required.');
+    }
 
     $spreadsheet = new Spreadsheet();
     $summarySheet = $spreadsheet->getActiveSheet();
@@ -91,6 +112,13 @@ try {
         ];
         $vismin = $ediSummary['VISMIN'][$flow][$currency];
         $lncr = $ediSummary['LNCR'][$flow][$currency];
+        $hasEdiData = count(array_filter(
+            array_merge($vismin, $lncr),
+            static fn(float $value): bool => $value != 0.0
+        )) > 0;
+        if (!$hasEdiData) {
+            $webValues = [0.0, 0.0, 0.0, 0.0];
+        }
         $variance = array_map(
             static fn(float $value, int $index): float => $value - $vismin[$index] - $lncr[$index],
             $webValues,
@@ -99,7 +127,11 @@ try {
         $summarySheet->setCellValue('A' . $rowNumber, $label);
         foreach ([2 => $webValues, 6 => $vismin, 10 => $lncr, 20 => $variance] as $startColumn => $values) {
             foreach ($values as $valueOffset => $value) {
-                $summarySheet->setCellValue([$startColumn + $valueOffset, $rowNumber], $value);
+                if (!$hasEdiData && in_array($startColumn, [2, 20], true)) {
+                    $summarySheet->setCellValue([$startColumn + $valueOffset, $rowNumber], null);
+                } else {
+                    $summarySheet->setCellValue([$startColumn + $valueOffset, $rowNumber], $value);
+                }
             }
         }
     }
@@ -211,7 +243,12 @@ try {
     }
 
     $spreadsheet->setActiveSheetIndex(0);
-    $filename = 'EDI_Report_' . str_replace('-', '_', $month) . '.xlsx';
+    $partnerLabel = strtoupper(trim((string) preg_replace('/[^A-Za-z0-9]+/', '_', $partner), '_'));
+    if ($partnerLabel === '') {
+        $partnerLabel = 'PARTNER';
+    }
+    $filename = 'EDI_Report_' . $partnerLabel . '_'
+        . str_replace('-', '_', $periodLabel) . '.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Cache-Control: max-age=0');

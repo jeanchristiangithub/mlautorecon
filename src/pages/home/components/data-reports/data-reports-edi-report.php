@@ -89,7 +89,32 @@ try {
             </div>
         </label>
 
-        <label class="edi-report-field edi-report-field--month">
+        <label class="edi-report-field edi-report-field--select">
+            <span>Time Frame <i class="edi-report-required" aria-hidden="true">*</i></span>
+            <select id="ediReportTimeFrame" name="time_frame" required>
+                <option value="" selected>Select Time Frame</option>
+                <option value="Daily">Daily</option>
+                <option value="Date Range">Date Range</option>
+                <option value="Monthly">Monthly</option>
+            </select>
+        </label>
+
+        <label id="ediReportDailyField" class="edi-report-field edi-report-field--date" hidden>
+            <span>Date <i class="edi-report-required" aria-hidden="true">*</i></span>
+            <input id="ediReportDate" name="date" type="date" disabled>
+        </label>
+
+        <label id="ediReportStartDateField" class="edi-report-field edi-report-field--date" hidden>
+            <span>Start Date <i class="edi-report-required" aria-hidden="true">*</i></span>
+            <input id="ediReportStartDate" name="start_date" type="date" disabled>
+        </label>
+
+        <label id="ediReportEndDateField" class="edi-report-field edi-report-field--date" hidden>
+            <span>End Date <i class="edi-report-required" aria-hidden="true">*</i></span>
+            <input id="ediReportEndDate" name="end_date" type="date" disabled>
+        </label>
+
+        <label id="ediReportMonthField" class="edi-report-field edi-report-field--month">
             <span>Month <i class="edi-report-required" aria-hidden="true">*</i></span>
             <input id="ediReportMonth" name="month" type="month" required>
         </label>
@@ -373,6 +398,49 @@ try {
     const exportButton = document.getElementById('ediReportExportExcel');
     let latestReportRows = [];
     let latestWebSummary = {};
+    let latestReportPeriod = null;
+
+    const timeFrameSelect = document.getElementById('ediReportTimeFrame');
+    const periodFields = {
+        Daily: [
+            document.getElementById('ediReportDailyField'),
+            document.getElementById('ediReportDate')
+        ],
+        'Date Range': [
+            document.getElementById('ediReportStartDateField'),
+            document.getElementById('ediReportStartDate'),
+            document.getElementById('ediReportEndDateField'),
+            document.getElementById('ediReportEndDate')
+        ],
+        Monthly: [
+            document.getElementById('ediReportMonthField'),
+            document.getElementById('ediReportMonth')
+        ]
+    };
+    const updateTimeFrameFields = () => {
+        const selectedTimeFrame = timeFrameSelect?.value || '';
+        Object.entries(periodFields).forEach(([timeFrame, elements]) => {
+            const isActive = timeFrame === selectedTimeFrame;
+            elements.forEach((element) => {
+                if (!element) return;
+                if (element.matches('label')) element.hidden = !isActive;
+                if (element.matches('input')) {
+                    element.disabled = !isActive;
+                    element.required = isActive;
+                }
+            });
+        });
+    };
+    timeFrameSelect?.addEventListener('change', updateTimeFrameFields);
+    updateTimeFrameFields();
+
+    const startDateInput = document.getElementById('ediReportStartDate');
+    const endDateInput = document.getElementById('ediReportEndDate');
+    startDateInput?.addEventListener('change', () => {
+        if (timeFrameSelect?.value !== 'Date Range' || !endDateInput) return;
+        endDateInput.value = startDateInput.value;
+        endDateInput.min = startDateInput.value;
+    });
 
     const formatSummaryCount = (value) => {
         const number = Number(value || 0);
@@ -415,22 +483,29 @@ try {
             });
         });
 
+        const visibleWebGrandTotals = [0, 0, 0, 0];
         document.querySelectorAll('[data-summary-flow][data-summary-currency]').forEach((summaryRow) => {
             const flow = summaryRow.dataset.summaryFlow;
             const currency = summaryRow.dataset.summaryCurrency;
             const cells = Array.from(summaryRow.querySelectorAll('td'));
             const webValues = webSummary?.[flow]?.[currency] || {};
-            [
+            const visminValues = totals.VISMIN[`${flow}-${currency}`] || [0, 0, 0, 0];
+            const lncrValues = totals.LNCR[`${flow}-${currency}`] || [0, 0, 0, 0];
+            const hasEdiData = [...visminValues, ...lncrValues]
+                .some((value) => Number(value || 0) !== 0);
+            const displayedWebValues = [
                 webValues.volume,
                 webValues.principal,
                 webValues.charge,
                 webValues.fx_share
-            ].forEach((value, metricIndex) => {
+            ].map((value) => hasEdiData ? Number(value || 0) : 0);
+            displayedWebValues.forEach((value, metricIndex) => {
                 const cell = cells[metricIndex];
                 if (!cell) return;
-                cell.textContent = metricIndex === 0
-                    ? formatSummaryCount(value)
-                    : formatSummaryAmount(value);
+                cell.textContent = hasEdiData
+                    ? (metricIndex === 0 ? formatSummaryCount(value) : formatSummaryAmount(value))
+                    : '';
+                visibleWebGrandTotals[metricIndex] += value;
             });
             ['VISMIN', 'LNCR'].forEach((mainzone, mainzoneIndex) => {
                 const values = totals[mainzone][`${flow}-${currency}`] || [0, 0, 0, 0];
@@ -443,37 +518,24 @@ try {
                         : formatSummaryAmount(value);
                 });
             });
-            const visminValues = totals.VISMIN[`${flow}-${currency}`] || [0, 0, 0, 0];
-            const lncrValues = totals.LNCR[`${flow}-${currency}`] || [0, 0, 0, 0];
-            [
-                webValues.volume,
-                webValues.principal,
-                webValues.charge,
-                webValues.fx_share
-            ].forEach((webValue, metricIndex) => {
+            displayedWebValues.forEach((webValue, metricIndex) => {
                 const variance = Number(webValue || 0)
                     - Number(visminValues[metricIndex] || 0)
                     - Number(lncrValues[metricIndex] || 0);
                 const cell = cells[18 + metricIndex];
                 if (!cell) return;
-                cell.textContent = metricIndex === 0
-                    ? formatSummaryCount(variance)
-                    : formatSummaryAmount(variance);
+                cell.textContent = hasEdiData
+                    ? (metricIndex === 0
+                        ? formatSummaryCount(variance)
+                        : formatSummaryAmount(variance))
+                    : '';
             });
         });
 
         const grandTotalCells = Array.from(document.querySelectorAll(
             '.edi-report-summary-total-row td'
         ));
-        const webGrandTotals = [0, 0, 0, 0];
-        Object.values(webSummary).forEach((flowSummary) => {
-            Object.values(flowSummary || {}).forEach((values) => {
-                [values.volume, values.principal, values.charge, values.fx_share]
-                    .forEach((value, metricIndex) => {
-                        webGrandTotals[metricIndex] += Number(value || 0);
-                    });
-            });
-        });
+        const webGrandTotals = visibleWebGrandTotals;
         webGrandTotals.forEach((value, metricIndex) => {
             const cell = grandTotalCells[metricIndex];
             if (!cell) return;
@@ -881,6 +943,10 @@ try {
                 zone: zoneSelect?.value || '',
                 region: regionSelect?.value || '',
                 branch_id: branchIdInput?.value || '',
+                time_frame: timeFrameSelect?.value || '',
+                date: document.getElementById('ediReportDate')?.value || '',
+                start_date: document.getElementById('ediReportStartDate')?.value || '',
+                end_date: document.getElementById('ediReportEndDate')?.value || '',
                 month: document.getElementById('ediReportMonth')?.value || ''
             });
             const response = await fetch(`${reportResultsEndpoint}?${params.toString()}`, {
@@ -894,6 +960,14 @@ try {
             tableBody.replaceChildren();
             latestReportRows = payload.rows;
             latestWebSummary = payload.web_summary || {};
+            latestReportPeriod = {
+                partner: partnerInput?.value.trim() || '',
+                time_frame: timeFrameSelect?.value || '',
+                date: document.getElementById('ediReportDate')?.value || '',
+                start_date: document.getElementById('ediReportStartDate')?.value || '',
+                end_date: document.getElementById('ediReportEndDate')?.value || '',
+                month: document.getElementById('ediReportMonth')?.value || ''
+            };
             updateEdiVolumeSummary(payload.rows, latestWebSummary);
             if (exportButton) exportButton.disabled = payload.rows.length === 0;
             if (payload.rows.length === 0) {
@@ -969,6 +1043,7 @@ try {
         } catch (error) {
             latestReportRows = [];
             latestWebSummary = {};
+            latestReportPeriod = null;
             updateEdiVolumeSummary([]);
             if (exportButton) exportButton.disabled = true;
             tableBody.replaceChildren();
@@ -988,7 +1063,7 @@ try {
     });
 
     exportButton?.addEventListener('click', async () => {
-        if (latestReportRows.length === 0) return;
+        if (latestReportRows.length === 0 || !latestReportPeriod) return;
         const originalText = exportButton.textContent;
         exportButton.disabled = true;
         exportButton.textContent = 'Exporting...';
@@ -997,7 +1072,7 @@ try {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
                 body: JSON.stringify({
-                    month: document.getElementById('ediReportMonth')?.value || '',
+                    ...latestReportPeriod,
                     rows: latestReportRows,
                     web_summary: latestWebSummary
                 })
@@ -1006,9 +1081,18 @@ try {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            const month = document.getElementById('ediReportMonth')?.value || 'report';
+            const periodName = latestReportPeriod.time_frame === 'Daily'
+                ? latestReportPeriod.date
+                : latestReportPeriod.time_frame === 'Date Range'
+                    ? `${latestReportPeriod.start_date}_to_${latestReportPeriod.end_date}`
+                    : latestReportPeriod.month;
+            const partnerName = String(latestReportPeriod.partner || 'PARTNER')
+                .trim()
+                .replace(/[^a-z0-9]+/gi, '_')
+                .replace(/^_+|_+$/g, '')
+                .toLocaleUpperCase();
             link.href = url;
-            link.download = `EDI_Report_${month.replace('-', '_')}.xlsx`;
+            link.download = `EDI_Report_${partnerName}_${String(periodName || 'report').replaceAll('-', '_')}.xlsx`;
             document.body.appendChild(link);
             link.click();
             link.remove();

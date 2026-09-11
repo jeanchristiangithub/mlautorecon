@@ -11,13 +11,45 @@ try {
     $zone = trim((string) ($_GET['zone'] ?? ''));
     $regionCode = trim((string) ($_GET['region'] ?? ''));
     $branchId = trim((string) ($_GET['branch_id'] ?? ''));
+    $timeFrame = trim((string) ($_GET['time_frame'] ?? 'Monthly'));
+    $date = trim((string) ($_GET['date'] ?? ''));
+    $startDate = trim((string) ($_GET['start_date'] ?? ''));
+    $endDate = trim((string) ($_GET['end_date'] ?? ''));
     $month = trim((string) ($_GET['month'] ?? ''));
 
-    if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
-        throw new InvalidArgumentException('A valid Month is required.');
+    $validDate = static function (string $value): bool {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        return $parsed !== false && $parsed->format('Y-m-d') === $value;
+    };
+    if ($timeFrame === 'Daily') {
+        if (!$validDate($date)) throw new InvalidArgumentException('A valid Date is required.');
+        $periodStart = $date;
+        $periodEnd = (new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d');
+    } elseif ($timeFrame === 'Date Range') {
+        if (!$validDate($startDate) || !$validDate($endDate)) {
+            throw new InvalidArgumentException('A valid Start Date and End Date are required.');
+        }
+        if ($startDate > $endDate) {
+            throw new InvalidArgumentException('Start Date must not be later than End Date.');
+        }
+        $periodStart = $startDate;
+        $periodEnd = (new DateTimeImmutable($endDate))->modify('+1 day')->format('Y-m-d');
+    } elseif ($timeFrame === 'Monthly') {
+        if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+            throw new InvalidArgumentException('A valid Month is required.');
+        }
+        $periodStart = $month . '-01';
+        $periodEnd = (new DateTimeImmutable($periodStart))->modify('first day of next month')->format('Y-m-d');
+    } else {
+        throw new InvalidArgumentException('A valid Time Frame is required.');
     }
-    $monthStart = $month . '-01';
-    $nextMonthStart = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
+    $snapshotMonthStart = (new DateTimeImmutable($periodEnd))
+        ->modify('-1 day')
+        ->modify('first day of this month')
+        ->format('Y-m-d');
+    $snapshotMonthEnd = (new DateTimeImmutable($snapshotMonthStart))
+        ->modify('first day of next month')
+        ->format('Y-m-d');
 
     $sql = "WITH moneygram_source_data AS (
         SELECT mpd.agent_name, mpd.tran_date, mpd.tran_type,
@@ -131,16 +163,16 @@ try {
              = mg.branch_id COLLATE utf8mb4_0900_ai_ci
         WHERE 1 = 1";
     $parameters = [
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
+        $periodStart,
+        $periodEnd,
+        $periodStart,
+        $periodEnd,
+        $periodStart,
+        $periodEnd,
+        $periodStart,
+        $periodEnd,
+        $snapshotMonthStart,
+        $snapshotMonthEnd,
     ];
     $mainzoneColumn = 'h.mbp_mainzone';
     $zoneColumn = 'h.mbp_zone';
@@ -295,12 +327,12 @@ try {
     HAVING flow IS NOT NULL AND currency IN ('PHP', 'USD')";
     $webSummaryStatement = fileRecDbConnection()->prepare($webSummarySql);
     $webSummaryStatement->execute([
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
-        $monthStart,
-        $nextMonthStart,
+        $periodStart,
+        $periodEnd,
+        $periodStart,
+        $periodEnd,
+        $periodStart,
+        $periodEnd,
     ]);
 
     $webSummary = [];
