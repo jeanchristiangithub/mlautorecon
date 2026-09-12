@@ -103,12 +103,56 @@
                 <h4 id="branchStatusLogsPresentDataTitle">Present Data</h4>
                 <dl class="branch-status-logs-modal__details">
                     <div>
-                        <dt>Branch ID</dt>
-                        <dd id="branchStatusLogsDetailsBranchId">—</dd>
+                        <dt>Posted Date</dt>
+                        <dd id="branchStatusLogsDetailsPostedDate">—</dd>
                     </div>
                     <div>
                         <dt>Branch Name</dt>
                         <dd id="branchStatusLogsDetailsBranchName">—</dd>
+                    </div>
+                    <div>
+                        <dt>Branch ID</dt>
+                        <dd id="branchStatusLogsDetailsBranchId">—</dd>
+                    </div>
+                    <div>
+                        <dt>BOS Code</dt>
+                        <dd id="branchStatusLogsDetailsBosCode">—</dd>
+                    </div>
+                    <div>
+                        <dt>Branch Type</dt>
+                        <dd id="branchStatusLogsDetailsBranchType">—</dd>
+                    </div>
+                    <div>
+                        <dt>Branch Status</dt>
+                        <dd id="branchStatusLogsDetailsBranchStatus">—</dd>
+                    </div>
+                    <div>
+                        <dt>Corporate Name</dt>
+                        <dd id="branchStatusLogsDetailsCorporateName">—</dd>
+                    </div>
+                    <div>
+                        <dt>Mainzone</dt>
+                        <dd id="branchStatusLogsDetailsMainzone">—</dd>
+                    </div>
+                    <div>
+                        <dt>Posted By</dt>
+                        <dd id="branchStatusLogsDetailsPostedBy">—</dd>
+                    </div>
+                    <div>
+                        <dt>Zone</dt>
+                        <dd id="branchStatusLogsDetailsZone">—</dd>
+                    </div>
+                    <div>
+                        <dt>Region Name 1</dt>
+                        <dd id="branchStatusLogsDetailsRegionName1">—</dd>
+                    </div>
+                    <div>
+                        <dt>Region Name 2</dt>
+                        <dd id="branchStatusLogsDetailsRegionName2">—</dd>
+                    </div>
+                    <div>
+                        <dt>Area</dt>
+                        <dd id="branchStatusLogsDetailsArea">—</dd>
                     </div>
                 </dl>
             </section>
@@ -127,14 +171,15 @@
                                 <th scope="col">Corporate Name</th>
                                 <th scope="col">Mainzone</th>
                                 <th scope="col">Zone</th>
-                                <th scope="col">Region Name</th>
+                                <th scope="col">Region Name 1</th>
+                                <th scope="col">Region Name 2</th>
                                 <th scope="col">Branch Status</th>
                                 <th scope="col">Posted By</th>
                             </tr>
                         </thead>
                         <tbody id="branchStatusLogsHistoryTableBody">
                             <tr class="branch-status-logs-modal__empty-row">
-                                <td colspan="11">Recorded history data will be displayed here.</td>
+                                <td colspan="12">Recorded history data will be displayed here.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -155,17 +200,34 @@
     const tableBody = document.getElementById('branchStatusLogsTableBody');
     const detailsModal = document.getElementById('branchStatusLogsDetailsModal');
     const detailsCloseButton = document.getElementById('branchStatusLogsDetailsClose');
+    const detailsPostedDate = document.getElementById('branchStatusLogsDetailsPostedDate');
     const detailsBranchId = document.getElementById('branchStatusLogsDetailsBranchId');
     const detailsBranchName = document.getElementById('branchStatusLogsDetailsBranchName');
+    const detailsBosCode = document.getElementById('branchStatusLogsDetailsBosCode');
+    const detailsBranchType = document.getElementById('branchStatusLogsDetailsBranchType');
+    const detailsBranchStatus = document.getElementById('branchStatusLogsDetailsBranchStatus');
+    const detailsCorporateName = document.getElementById('branchStatusLogsDetailsCorporateName');
+    const detailsMainzone = document.getElementById('branchStatusLogsDetailsMainzone');
+    const detailsPostedBy = document.getElementById('branchStatusLogsDetailsPostedBy');
+    const detailsZone = document.getElementById('branchStatusLogsDetailsZone');
+    const detailsRegionName1 = document.getElementById('branchStatusLogsDetailsRegionName1');
+    const detailsRegionName2 = document.getElementById('branchStatusLogsDetailsRegionName2');
+    const detailsArea = document.getElementById('branchStatusLogsDetailsArea');
+    const historyTableBody = document.getElementById('branchStatusLogsHistoryTableBody');
 
     if (!filterForm || !searchInput || !suggestions || !displayButton ||
         !displayAllButton || !loadingStatus || !tableBody || !detailsModal ||
-        !detailsCloseButton || !detailsBranchId || !detailsBranchName) return;
+        !detailsCloseButton || !detailsPostedDate || !detailsBranchId || !detailsBranchName ||
+        !detailsBosCode || !detailsBranchType || !detailsBranchStatus || !detailsCorporateName || !detailsMainzone ||
+        !detailsPostedBy ||
+        !detailsZone || !detailsRegionName1 || !detailsRegionName2 || !detailsArea ||
+        !historyTableBody) return;
 
     let activeIndex = -1;
     let visibleBranches = [];
     let searchTimer = null;
     let requestController = null;
+    let historyRequestController = null;
     let modalTrigger = null;
 
     document.body.appendChild(detailsModal);
@@ -293,6 +355,17 @@
             viewButton.setAttribute('aria-label', 'View Branch status history details');
             viewButton.dataset.branchId = branch.branch_id;
             viewButton.dataset.branchName = branch.branch_name;
+            viewButton.dataset.bosCode = branch.bos_code || '';
+            viewButton.dataset.branchType = branch.branch_type || '';
+            viewButton.dataset.branchStatus = branch.branch_status || '';
+            viewButton.dataset.corporateName = branch.corporate_name || '';
+            viewButton.dataset.mainzone = branch.mainzone || '';
+            viewButton.dataset.postedBy = branch.posted_by || '';
+            viewButton.dataset.zone = branch.zone || '';
+            viewButton.dataset.regionName1 = branch.region_name_1 || '';
+            viewButton.dataset.regionName2 = branch.region_name_2 || '';
+            viewButton.dataset.area = branch.area || '';
+            viewButton.dataset.postedAt = branch.posted_at || '';
             const viewIcon = document.createElement('span');
             viewIcon.className = 'material-icons-outlined';
             viewIcon.setAttribute('aria-hidden', 'true');
@@ -346,18 +419,116 @@
         }
     }
 
+    function formatPostedDate(value) {
+        const rawValue = String(value || '').trim();
+        const match = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if (!match) return rawValue || '—';
+
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const month = months[Number(match[2]) - 1];
+        const hour24 = Number(match[4]);
+        if (!month || hour24 > 23) return rawValue;
+
+        const hour12 = hour24 % 12 || 12;
+        const meridiem = hour24 >= 12 ? 'PM' : 'AM';
+        return month + ' ' + match[3] + ', ' + match[1] + ' '
+            + String(hour12).padStart(2, '0') + ':' + match[5] + ':' + match[6] + ' ' + meridiem;
+    }
+
+    function renderHistoryMessage(message) {
+        historyTableBody.innerHTML = '';
+        const row = document.createElement('tr');
+        row.className = 'branch-status-logs-modal__empty-row';
+        const cell = document.createElement('td');
+        cell.colSpan = 12;
+        cell.textContent = message;
+        row.appendChild(cell);
+        historyTableBody.appendChild(row);
+    }
+
+    function renderHistoryRows(rows) {
+        historyTableBody.innerHTML = '';
+        if (!rows.length) {
+            renderHistoryMessage('No recorded history data found.');
+            return;
+        }
+
+        const fields = [
+            'posted_at', 'branch_id', 'bos_code', 'branch_name', 'area',
+            'corporate_name', 'mainzone', 'zone', 'region_name_1',
+            'region_name_2', 'branch_status', 'posted_by'
+        ];
+
+        rows.forEach(function (historyRow) {
+            const row = document.createElement('tr');
+            fields.forEach(function (field) {
+                const cell = document.createElement('td');
+                const value = field === 'posted_at'
+                    ? formatPostedDate(historyRow[field])
+                    : String(historyRow[field] || '').trim() || '—';
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+            historyTableBody.appendChild(row);
+        });
+    }
+
+    async function loadRecordedHistory(trigger) {
+        if (historyRequestController) historyRequestController.abort();
+        historyRequestController = new AbortController();
+        renderHistoryMessage('Loading recorded history data...');
+
+        const params = new URLSearchParams({
+            branch_id: trigger.dataset.branchId || '',
+            posted_at: trigger.dataset.postedAt || ''
+        });
+
+        try {
+            const endpoint = window.autoreconUrl('src/controllers/history-logs/branch-status-log-history.php');
+            const response = await fetch(endpoint + '?' + params.toString(), {
+                signal: historyRequestController.signal,
+                headers: { Accept: 'application/json' }
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || 'Unable to load recorded branch history data.');
+            }
+            renderHistoryRows(Array.isArray(payload.rows) ? payload.rows : []);
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                renderHistoryMessage(error.message || 'Unable to load recorded branch history data.');
+            }
+        }
+    }
+
     function openDetailsModal(trigger) {
         modalTrigger = trigger;
+        detailsPostedDate.textContent = formatPostedDate(trigger.dataset.postedAt);
         detailsBranchId.textContent = trigger.dataset.branchId || '—';
         detailsBranchName.textContent = trigger.dataset.branchName || '—';
+        detailsBosCode.textContent = trigger.dataset.bosCode || '—';
+        detailsBranchType.textContent = trigger.dataset.branchType || '—';
+        detailsBranchStatus.textContent = trigger.dataset.branchStatus || '—';
+        detailsCorporateName.textContent = trigger.dataset.corporateName || '—';
+        detailsMainzone.textContent = trigger.dataset.mainzone || '—';
+        detailsPostedBy.textContent = trigger.dataset.postedBy || '—';
+        detailsZone.textContent = trigger.dataset.zone || '—';
+        detailsRegionName1.textContent = trigger.dataset.regionName1 || '—';
+        detailsRegionName2.textContent = trigger.dataset.regionName2 || '—';
+        detailsArea.textContent = trigger.dataset.area || '—';
         detailsModal.hidden = false;
         document.body.classList.add('branch-status-logs-modal-open');
         detailsCloseButton.focus();
+        loadRecordedHistory(trigger);
     }
 
     function closeDetailsModal() {
         if (detailsModal.hidden) return;
         detailsModal.hidden = true;
+        if (historyRequestController) historyRequestController.abort();
         document.body.classList.remove('branch-status-logs-modal-open');
         if (modalTrigger && document.contains(modalTrigger)) modalTrigger.focus();
         modalTrigger = null;

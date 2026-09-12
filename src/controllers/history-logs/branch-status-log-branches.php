@@ -41,18 +41,73 @@ try {
                         NULLIF(TRIM(mbp_branch_name_description), ''),
                         ''
                     ) AS branch_name,
+                    TRIM(mbp_code) AS bos_code,
+                    TRIM(mbp_mlmatic_status) AS branch_status,
+                    TRIM(mbp_corporate_name) AS corporate_name,
+                    TRIM(mbp_mainzone) AS mainzone,
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT_WS(' ',
+                            NULLIF(TRIM(u.firstname), ''),
+                            NULLIF(TRIM(u.middlename), ''),
+                            NULLIF(TRIM(u.lastname), '')
+                        )), ''),
+                        NULLIF(TRIM(h.posted_by), ''),
+                        ''
+                    ) AS posted_by,
+                    TRIM(mbp_zone) AS zone,
+                    COALESCE(
+                        NULLIF(TRIM(mrm_region_description), ''),
+                        NULLIF(TRIM(mbp_gl_region), ''),
+                        NULLIF(TRIM(mbp_region_code), ''),
+                        ''
+                    ) AS region_name_1,
+                    COALESCE(
+                        NULLIF(TRIM(mbp_mlmatic_region), ''),
+                        NULLIF(TRIM(mrm_region_description), ''),
+                        NULLIF(TRIM(mbp_gl_region), ''),
+                        NULLIF(TRIM(mbp_region_code), ''),
+                        ''
+                    ) AS region_name_2,
+                    TRIM(mbp_area) AS area,
                     posted_at
-                FROM filerecondb.corporate_branch_status_history
+                FROM filerecondb.corporate_branch_status_history h
+                LEFT JOIN filerecondb.users u
+                  ON TRIM(u.id_number) COLLATE utf8mb4_unicode_ci
+                     = TRIM(h.posted_by) COLLATE utf8mb4_unicode_ci
             ), merged_branches AS (
-                SELECT branch_id, branch_name, MAX(posted_at) AS posted_at
+                SELECT
+                    branch_id,
+                    branch_name,
+                    bos_code,
+                    branch_status,
+                    corporate_name,
+                    mainzone,
+                    posted_by,
+                    zone,
+                    region_name_1,
+                    region_name_2,
+                    area,
+                    posted_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY branch_id, branch_name
+                        ORDER BY posted_at DESC
+                    ) AS pair_rank
                 FROM normalized_branches
                 WHERE branch_id <> ''
                   AND branch_name <> ''
-                GROUP BY branch_id, branch_name
             ), ranked_branches AS (
                 SELECT
                     branch_id,
                     branch_name,
+                    bos_code,
+                    branch_status,
+                    corporate_name,
+                    mainzone,
+                    posted_by,
+                    zone,
+                    region_name_1,
+                    region_name_2,
+                    area,
                     posted_at,
                     ROW_NUMBER() OVER (
                         PARTITION BY branch_id
@@ -63,8 +118,22 @@ try {
                         ORDER BY posted_at DESC, branch_id ASC
                     ) AS branch_name_rank
                 FROM merged_branches
+                WHERE pair_rank = 1
             )
-            SELECT branch_id, branch_name, posted_at
+            SELECT
+                branch_id,
+                branch_name,
+                bos_code,
+                '' AS branch_type,
+                branch_status,
+                corporate_name,
+                mainzone,
+                posted_by,
+                zone,
+                region_name_1,
+                region_name_2,
+                area,
+                posted_at
             FROM ranked_branches
             WHERE branch_id_rank = 1
               AND branch_name_rank = 1";
